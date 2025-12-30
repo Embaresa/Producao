@@ -1,0 +1,2318 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#2563eb">
+    <title>Registo Produção - Évora</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f8;
+            min-height: 100vh;
+        }
+        input, select, button { font-size: 16px !important; }
+        select { background: white; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner { animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .syncing { animation: pulse 1.5s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // URLs do Power Automate configurados
+        const POWER_AUTOMATE_PRODUCAO = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7d6d064896034900976cdbe6fecbd809/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o25Z-eFD68rkovgpItkF2MLL1wKINpkqRFsIZXBYWv8';
+        const POWER_AUTOMATE_PERTURBACOES = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4';
+
+        const App = () => {
+            const [view, setView] = useState('form'); // 'form', 'registos', 'perturbacao', 'operacao'
+            const [registos, setRegistos] = useState([]);
+            const [operadorNome, setOperadorNome] = useState(localStorage.getItem('operadorNome') || '');
+            const [configured, setConfigured] = useState(false);
+            const [syncing, setSyncing] = useState(false);
+            const [syncStatus, setSyncStatus] = useState({ online: true, pendentes: 0 });
+            const [configUrl, setConfigUrl] = useState(false);
+
+            useEffect(() => {
+                const saved = localStorage.getItem('registosPendentes');
+                if (saved) {
+                    setRegistos(JSON.parse(saved));
+                }
+                if (operadorNome) {
+                    setConfigured(true);
+                }
+                if (POWER_AUTOMATE_PRODUCAO === 'COLE_AQUI_URL_FLOW_PRODUCAO') {
+                    setConfigUrl(true);
+                }
+                updateSyncStatus();
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('registosPendentes', JSON.stringify(registos));
+                updateSyncStatus();
+            }, [registos]);
+
+            useEffect(() => {
+                localStorage.setItem('registosPerturbacoes', JSON.stringify(registosPerturbacoes));
+            }, [registosPerturbacoes]);
+
+            const updateSyncStatus = () => {
+                const pendentes = registos.filter(r => !r.synced).length;
+                setSyncStatus({ online: navigator.onLine, pendentes });
+            };
+
+            const trabalhadores = [
+                "Amílcar Manuel Monginho Barreto",
+                "André Avelino Tavares Rocha",
+                "David Alexandre Lopes Rocha",
+                "Hugo José Ferreira da Silva",
+                "Joaquim Comenda",
+                "Nuno Rafael Pereira Franco",
+                "Pedro Miguel Serranito Familia",
+                "Rui Miguel Charrua Richáu",
+                "Valdir Tavares",
+                "William Chaves Inaba"
+            ];
+            
+            const [registo, setRegisto] = useState({
+                data: new Date().toISOString().split('T')[0],
+                tipologia: '',
+                artigo: '',
+                tipoCaixa: '',
+                operacao: '',
+                unidadeProducao: '',
+                horaInicio: '',
+                horaFim: '',
+                comentarios: ''
+            });
+
+            const [perturbacao, setPerturbacao] = useState({
+                data: new Date().toISOString().split('T')[0],
+                descricao: '',
+                horaInicio: '',
+                horaFim: ''
+            });
+
+            const [registosPerturbacoes, setRegistosPerturbacoes] = useState(() => {
+                const saved = localStorage.getItem('registosPerturbacoes');
+                return saved ? JSON.parse(saved) : [];
+            });
+
+            // Estado do painel de administração
+            const [showAdmin, setShowAdmin] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [adminAuthed, setAdminAuthed] = useState(false);
+            const [adminTab, setAdminTab] = useState('importar'); // 'importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores'
+            const [novoItem, setNovoItem] = useState({ artigo: '', tipo: '', operacao: '', unidade: '', perturbacao: '', colaborador: '' });
+            const [showResumo, setShowResumo] = useState(false);
+            const [modoRapido, setModoRapido] = useState(false);
+            const [resumoFinalDia, setResumoFinalDia] = useState(null);
+
+            // Password de administração - ALTERE ESTA PASSWORD!
+            const ADMIN_PASSWORD = 'embaresa2025';
+
+            // Carregar dados personalizados do localStorage com validação
+            const [customArtigos, setCustomArtigos] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('customArtigos');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        // Validar que é um array com objetos válidos
+                        if (Array.isArray(parsed) && parsed.every(a => a && a.Artigo && a.Tipo)) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar artigos:', e);
+                }
+                return [];
+            });
+            const [customOperacoes, setCustomOperacoes] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('customOperacoes');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.every(o => o && o.Op && o.Unidade)) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar operações:', e);
+                }
+                return [];
+            });
+            const [customPerturbacoes, setCustomPerturbacoes] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('customPerturbacoes');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.every(p => typeof p === 'string')) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar perturbações:', e);
+                }
+                return [];
+            });
+            const [customColaboradores, setCustomColaboradores] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('customColaboradores');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        if (Array.isArray(parsed) && parsed.every(c => typeof c === 'string')) {
+                            return parsed;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar colaboradores:', e);
+                }
+                return [];
+            });
+
+            // Guardar dados personalizados quando mudam
+            useEffect(() => {
+                localStorage.setItem('customArtigos', JSON.stringify(customArtigos));
+            }, [customArtigos]);
+            useEffect(() => {
+                localStorage.setItem('customOperacoes', JSON.stringify(customOperacoes));
+            }, [customOperacoes]);
+            useEffect(() => {
+                localStorage.setItem('customPerturbacoes', JSON.stringify(customPerturbacoes));
+            }, [customPerturbacoes]);
+            useEffect(() => {
+                localStorage.setItem('customColaboradores', JSON.stringify(customColaboradores));
+            }, [customColaboradores]);
+
+            const saveOperador = () => {
+                if (!operadorNome) {
+                    alert('Selecione o seu nome!');
+                    return;
+                }
+                localStorage.setItem('operadorNome', operadorNome);
+                setConfigured(true);
+            };
+
+            const artigos = [
+                // E2 (Upper/Lower)
+                {"Artigo": "E2-Lower Dir V2", "Tipo": "E2"},
+                {"Artigo": "E2-Lower Esq V2", "Tipo": "E2"},
+                {"Artigo": "E2-Upper Dir V2", "Tipo": "E2"},
+                {"Artigo": "E2-Upper Esq V2", "Tipo": "E2"},
+                // E2 - Frações
+                {"Artigo": "E2- Cx1 Desc 4Metros", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 2", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 7", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 8", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 9", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 10", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 11", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 12", "Tipo": "E2-Frac"},
+                {"Artigo": "E2-Frac 22", "Tipo": "E2-Frac"},
+                // KC390 (Upper/Lower, EV, EH)
+                {"Artigo": "KC 390-Lower Dir", "Tipo": "KC390"},
+                {"Artigo": "KC 390-Lower Esq", "Tipo": "KC390"},
+                {"Artigo": "KC 390-Upper Dir", "Tipo": "KC390"},
+                {"Artigo": "KC 390-Upper Esq", "Tipo": "KC390"},
+                {"Artigo": "KC 390 EV", "Tipo": "KC390"},
+                {"Artigo": "KC390-EH", "Tipo": "KC390"},
+                // KC390 - Frações
+                {"Artigo": "KC 390 Frac 2", "Tipo": "KC390-Frac"},
+                {"Artigo": "KC 390 Frac 4", "Tipo": "KC390-Frac"},
+                {"Artigo": "KC 390 Frac 6", "Tipo": "KC390-Frac"},
+                {"Artigo": "KC 390 Frac 13", "Tipo": "KC390-Frac"},
+                {"Artigo": "KC 390 Wing tip", "Tipo": "KC390-Frac"},
+                // Praetor
+                {"Artigo": "Praetor- Semi Asa Dir", "Tipo": "Praetor"},
+                {"Artigo": "Praetor- Semi Asa Esq", "Tipo": "Praetor"},
+                {"Artigo": "Praetor EH", "Tipo": "Praetor"},
+                {"Artigo": "Praetor EV", "Tipo": "Praetor"},
+                {"Artigo": "Praetor TC", "Tipo": "Praetor"},
+                // E1
+                {"Artigo": "E1-Embalagem A", "Tipo": "E1"},
+                {"Artigo": "E1-Embalagem F", "Tipo": "E1"},
+                {"Artigo": "E1-Embalagem G", "Tipo": "E1"},
+                {"Artigo": "E1-Embalagem NMF", "Tipo": "E1"},
+                // Maquinação (Caixas sobras)
+                {"Artigo": "Cxs sobras reforçadas", "Tipo": "Maquinacao"},
+                {"Artigo": "Cxs sobras tipo jaula 1600*1200*800", "Tipo": "Maquinacao"},
+                {"Artigo": "Cxs sobras tipo jaula 1600", "Tipo": "Maquinacao"},
+                {"Artigo": "Cxs sobras tipo jaula 1200", "Tipo": "Maquinacao"},
+                // Transporte
+                {"Artigo": "Transporte", "Tipo": "Transporte"}
+            ];
+
+            // Lista de tipologias/programas ANN
+            const tipologias = [
+                { id: "E2", nome: "E2", icon: "✈️" },
+                { id: "E2-Frac", nome: "E2 - Frações", icon: "📦" },
+                { id: "KC390", nome: "KC390", icon: "✈️" },
+                { id: "KC390-Frac", nome: "KC390 - Frações", icon: "📦" },
+                { id: "Praetor", nome: "Praetor", icon: "✈️" },
+                { id: "E1", nome: "E1", icon: "📦" },
+                { id: "Maquinacao", nome: "Maquinação", icon: "⚙️" },
+                { id: "Transporte", nome: "Transportes", icon: "🚛" }
+            ];
+
+            // Função para filtrar artigos por tipologia
+            const getArtigosFiltrados = () => {
+                if (!registo.tipologia) return [];
+                // Usar dados importados se existirem
+                const importedArtigos = JSON.parse(localStorage.getItem('importedArtigos') || '[]');
+                const artigosBase = importedArtigos.length > 0 ? importedArtigos : todosArtigos;
+                return artigosBase.filter(a => a.Tipo === registo.tipologia);
+            };
+            
+            // Obter lista de programas (importados ou default)
+            const getProgramas = () => {
+                const importedProgramas = JSON.parse(localStorage.getItem('importedProgramas') || '[]');
+                return importedProgramas.length > 0 ? importedProgramas : tipologias;
+            };
+
+            // Operações com artigos associados
+            const operacoesComArtigos = [
+                // E2 Upper/Lower - Evora1
+                {"Op": "E2- Soldadura Integral do bastidor", "Unidade": "Evora1-Soldadura", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                {"Op": "E2- Colocação de fundo e patins", "Unidade": "Evora1-Montagem", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                {"Op": "E2-Montagem e revestimento integral de suportes", "Unidade": "Evora1-Montagem", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                {"Op": "E2-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                {"Op": "E2-Montagem de suportes, topos, colocação de lona e armazenagem", "Unidade": "Evora1-Montagem", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                {"Op": "E2- Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"]},
+                
+                // KC390 Upper/Lower - Evora1
+                {"Op": "KC390-Soldadura Integral bastidor", "Unidade": "Evora1-Montagem", "Artigos": ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"]},
+                {"Op": "KC390-Montagem caixa", "Unidade": "Evora1-Montagem", "Artigos": ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"]},
+                {"Op": "KC390 asa-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"]},
+                {"Op": "KC 390-Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"]},
+                
+                // KC390 EV
+                {"Op": "KC390 EV-Montagem caixa", "Unidade": "Evora1-Montagem", "Artigos": ["KC 390 EV"]},
+                {"Op": "KC390 EV-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["KC 390 EV"]},
+                {"Op": "KC390 EV-Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["KC 390 EV"]},
+                
+                // KC390 EH
+                {"Op": "KC390 EH-Montagem caixa", "Unidade": "Evora1-Montagem", "Artigos": ["KC390-EH"]},
+                {"Op": "KC390 EH-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["KC390-EH"]},
+                {"Op": "KC390 EH-Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["KC390-EH"]},
+                
+                // Praetor Semi Asa
+                {"Op": "Praetor Semi asa- Soldadura Integral do bastidor", "Unidade": "Evora1-Soldadura", "Artigos": ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"]},
+                {"Op": "Praetor Semi asa-Montagem de suportes, topos, colocação de lona e armazenagem", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"]},
+                {"Op": "Praetor Semi asa-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"]},
+                {"Op": "Praetor Semi asa-Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"]},
+                
+                // Praetor EH
+                {"Op": "Praetor EH-Montagem", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor EH"]},
+                {"Op": "Praetor EH-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor EH"]},
+                {"Op": "Praetor EH-Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["Praetor EH"]},
+                
+                // Praetor EV
+                {"Op": "Praetor EV- Montagem caixa", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor EV"]},
+                {"Op": "Praetor EV-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor EV"]},
+                {"Op": "Praetor EV- Embalamento", "Unidade": "Evora1-Embalamento", "Artigos": ["Praetor EV"]},
+                
+                // Praetor TC (Tail Cone)
+                {"Op": "Montagem caixa Tail cone", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor TC"]},
+                {"Op": "Praetor TC-Preparação de Bolsa de alumínio", "Unidade": "Evora1-Montagem", "Artigos": ["Praetor TC"]},
+                {"Op": "Embalamento Tail cone", "Unidade": "Evora1-Embalamento", "Artigos": ["Praetor TC"]},
+                
+                // E2 Frações - Évora 2
+                {"Op": "E2- Cx1 Desc 4Metros-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2- Cx1 Desc 4Metros"]},
+                {"Op": "E2-Frac 2-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 2"]},
+                {"Op": "E2-Frac 7-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 7"]},
+                {"Op": "E2-Frac 8-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 8"]},
+                {"Op": "E2-Frac 9-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 9"]},
+                {"Op": "E2-Frac 10-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 10"]},
+                {"Op": "E2-Frac 11-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 11"]},
+                {"Op": "E2-Frac 12-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 12"]},
+                {"Op": "E2-Frac 22-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E2-Frac 22"]},
+                
+                // KC390 Frações - Évora 2
+                {"Op": "KC390-Frac 2-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["KC 390 Frac 2"]},
+                {"Op": "KC390-Frac 4-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["KC 390 Frac 4"]},
+                {"Op": "KC390-Frac 6-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["KC 390 Frac 6"]},
+                {"Op": "KC390-Frac 13-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["KC 390 Frac 13"]},
+                {"Op": "KC390-Wing Tip-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["KC 390 Wing tip"]},
+                
+                // E1 - Évora 2
+                {"Op": "E1-Embalagem A-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E1-Embalagem A"]},
+                {"Op": "E1-Embalagem F-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E1-Embalagem F"]},
+                {"Op": "E1-Embalagem G-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E1-Embalagem G"]},
+                {"Op": "E1-NMF Revestimentos-Preparação e Montagem", "Unidade": "Évora 2-Montagem", "Artigos": ["E1-Embalagem NMF"]},
+                
+                // Caixas sobras - Évora 2
+                {"Op": "Preparação e Montagem Cx sobras Reforçada tipo jaula", "Unidade": "Évora 2-Montagem", "Artigos": ["Cxs sobras reforçadas", "Cxs sobras tipo jaula 1600*1200*800", "Cxs sobras tipo jaula 1600", "Cxs sobras tipo jaula 1200"]},
+                {"Op": "Preparação e Montagem Cx sobras Reforçada", "Unidade": "Évora 2-Montagem", "Artigos": ["Cxs sobras reforçadas", "Cxs sobras tipo jaula 1600*1200*800", "Cxs sobras tipo jaula 1600", "Cxs sobras tipo jaula 1200"]},
+                
+                // Transportes
+                {"Op": "Carga e Transporte de caixas para ANN/EMBARESA2", "Unidade": "Transportes", "Artigos": ["Transporte"]}
+            ];
+
+            // Manter compatibilidade - converter para formato antigo
+            const operacoes = operacoesComArtigos.map(o => ({ Op: o.Op, Unidade: o.Unidade }));
+
+            const tiposPerturbacao = [
+                "Atraso entrega de peça no cliente",
+                "Avaria pistola cravação",
+                "Avaria/ Manutenção ponte rolante",
+                "Descarga camião material",
+                "Falha leitura do plano/ material errado",
+                "Falta de Pessoal",
+                "Falta material de embalagem",
+                "Limpeza",
+                "Limpeza camião",
+                "Limpeza e preparação material para soldadura",
+                "Manutenção Programada",
+                "Material de embalagem Fora de dimensões",
+                "Movimentação residuos para destinatário reciclagem",
+                "Novos equipamentos /Formação / 1ªpeça/ Try outs",
+                "Organização & Movimentação de material",
+                "Preparação arranque/ fim e para cliente",
+                "Preparação de material",
+                "Preparação material para stock de semiacabados E2",
+                "Preparação material para stock de semiacabados Fracções",
+                "Problemas de esquadria - madeira torcida",
+                "Produto não conforme",
+                "Produto não conforme no cliente",
+                "Produto para Semi-Acabado",
+                "Reparação de lona rasgada",
+                "Reparação produto não conforme para cliente",
+                "Reunião/ analise planeamento vs objectivos",
+                "Separação de material para montagem",
+                "Tempo espera no cliente por falta Caixa / Peça/qualidade"
+            ];
+
+            // Listas combinadas (base + personalizados) com filtro de segurança
+            const todosArtigos = [...artigos, ...customArtigos].filter(a => a && a.Artigo);
+            const todasOperacoes = [...operacoes, ...customOperacoes].filter(o => o && o.Op);
+            const todasPerturbacoes = [...tiposPerturbacao, ...customPerturbacoes].filter(p => p);
+            const todosColaboradores = [...trabalhadores, ...customColaboradores].filter(c => c).sort();
+
+            const calcularDuracao = (inicio, fim) => {
+                if (!inicio || !fim) return '';
+                const [hi, mi] = inicio.split(':').map(Number);
+                const [hf, mf] = fim.split(':').map(Number);
+                let mins = (hf * 60 + mf) - (hi * 60 + mi);
+                if (mins < 0) mins += 24 * 60;
+                return `${Math.floor(mins / 60)}h ${mins % 60}min`;
+            };
+
+            const calcularMinutos = (inicio, fim) => {
+                if (!inicio || !fim) return 0;
+                const [hi, mi] = inicio.split(':').map(Number);
+                const [hf, mf] = fim.split(':').map(Number);
+                let mins = (hf * 60 + mf) - (hi * 60 + mi);
+                if (mins < 0) mins += 24 * 60;
+                return mins;
+            };
+
+            // Obter registos do dia atual
+            const getRegistosDoDia = () => {
+                const hoje = registo.data;
+                return registos.filter(r => r.data === hoje && r.operador === operadorNome);
+            };
+
+            // Obter perturbações do dia atual
+            const getPerturbacoesDoDia = () => {
+                const hoje = registo.data;
+                return registosPerturbacoes.filter(p => p.data === hoje && p.operador === operadorNome);
+            };
+
+            // Validar sobreposição de horas
+            const validarHoras = (novaHoraInicio, novaHoraFim) => {
+                const registosDoDia = getRegistosDoDia();
+                const novoInicio = novaHoraInicio.replace(':', '');
+                const novoFim = novaHoraFim.replace(':', '');
+
+                for (const r of registosDoDia) {
+                    const existeInicio = r.horaInicio.replace(':', '');
+                    const existeFim = r.horaFim.replace(':', '');
+                    
+                    // Verificar sobreposição
+                    if ((novoInicio >= existeInicio && novoInicio < existeFim) ||
+                        (novoFim > existeInicio && novoFim <= existeFim) ||
+                        (novoInicio <= existeInicio && novoFim >= existeFim)) {
+                        return {
+                            valido: false,
+                            mensagem: `⚠️ Horas sobrepõem-se com registo existente (${r.horaInicio}-${r.horaFim}: ${r.artigo})`
+                        };
+                    }
+                }
+                return { valido: true };
+            };
+
+            // Obter última hora de fim do dia
+            const getUltimaHoraFim = () => {
+                const registosDoDia = getRegistosDoDia();
+                if (registosDoDia.length === 0) return '';
+                
+                const ordenados = registosDoDia.sort((a, b) => 
+                    a.horaFim.replace(':', '') - b.horaFim.replace(':', '')
+                );
+                return ordenados[ordenados.length - 1].horaFim;
+            };
+
+            // Calcular totais do dia
+            const calcularTotaisDia = () => {
+                const registosDoDia = getRegistosDoDia();
+                const perturbacoesDoDia = getPerturbacoesDoDia();
+                let totalMinutos = 0;
+                let totalQuantidade = 0;
+                let totalMinutosPerturbacoes = 0;
+
+                registosDoDia.forEach(r => {
+                    totalMinutos += calcularMinutos(r.horaInicio, r.horaFim);
+                    totalQuantidade += parseInt(r.quantidade) || 0;
+                });
+
+                perturbacoesDoDia.forEach(p => {
+                    totalMinutosPerturbacoes += calcularMinutos(p.horaInicio, p.horaFim);
+                });
+
+                const totalMinutosDia = totalMinutos + totalMinutosPerturbacoes;
+
+                return {
+                    totalRegistos: registosDoDia.length,
+                    totalTempo: `${Math.floor(totalMinutos / 60)}h ${totalMinutos % 60}min`,
+                    totalQuantidade,
+                    totalPerturbacoes: perturbacoesDoDia.length,
+                    totalTempoPerturbacoes: `${Math.floor(totalMinutosPerturbacoes / 60)}h ${totalMinutosPerturbacoes % 60}min`,
+                    totalMinutosDia,
+                    totalTempoDia: `${Math.floor(totalMinutosDia / 60)}h ${totalMinutosDia % 60}min`,
+                    diferencaMinutos: totalMinutosDia - 480 // 8h = 480 minutos
+                };
+            };
+
+            // Terminar dia e mostrar resumo
+            const terminarDia = () => {
+                const registosDoDia = getRegistosDoDia();
+                const perturbacoesDoDia = getPerturbacoesDoDia();
+                const totais = calcularTotaisDia();
+                
+                setResumoFinalDia({
+                    data: registo.data,
+                    colaborador: operadorNome,
+                    registos: registosDoDia,
+                    perturbacoes: perturbacoesDoDia,
+                    totais: totais
+                });
+                
+                setConfigured(false);
+                localStorage.removeItem('operadorNome');
+            };
+
+            // Função para obter o prefixo do artigo
+            const getPrefixoArtigo = (artigo) => {
+                if (!artigo) return '';
+                
+                // Mapeamento de prefixos
+                if (artigo.startsWith('E2-') || artigo.startsWith('E2 ')) return 'E2';
+                if (artigo.startsWith('E1-')) return 'E1';
+                if (artigo.startsWith('KC 390') || artigo.startsWith('KC390')) return 'KC390';
+                if (artigo.startsWith('Praetor')) return 'Praetor';
+                if (artigo.includes('sobras') || artigo.includes('Cxs')) return 'CxSobras';
+                
+                return '';
+            };
+
+            // Função para filtrar operações pelo artigo selecionado
+            const getOperacoesFiltradas = () => {
+                if (!registo.artigo) return [];
+                
+                // Usar dados importados se existirem
+                const importedOperacoes = JSON.parse(localStorage.getItem('importedOperacoes') || '[]');
+                const operacoesBase = importedOperacoes.length > 0 ? importedOperacoes : operacoesComArtigos;
+                
+                // Filtrar operações que incluem o artigo selecionado
+                const operacoesFiltradas = operacoesBase.filter(op => 
+                    op.Artigos && op.Artigos.some(a => a.trim() === registo.artigo.trim())
+                );
+                
+                // Adicionar operações custom
+                const customOps = customOperacoes.filter(o => o && o.Op);
+                
+                return [...operacoesFiltradas, ...customOps];
+            };
+
+            // Enviar para Power Automate
+            const enviarParaPowerAutomate = async (url, dados) => {
+                if (url.includes('COLE_AQUI')) {
+                    console.log('URL do Power Automate não configurado');
+                    return false;
+                }
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(dados)
+                    });
+                    
+                    console.log('Response status:', response.status);
+                    
+                    if (response.ok || response.status === 202) {
+                        return true;
+                    } else {
+                        const errorText = await response.text();
+                        console.error('Erro Power Automate:', errorText);
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('Erro ao enviar:', error);
+                    // Se for erro de CORS mas o pedido foi enviado, considerar sucesso
+                    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                        console.log('Possível erro CORS - verificar no Power Automate se foi recebido');
+                        return true;
+                    }
+                    return false;
+                }
+            };
+
+            const adicionarRegisto = async () => {
+                if (!registo.artigo || !registo.operacao || !registo.horaInicio || !registo.horaFim) {
+                    alert('Preencha todos os campos obrigatórios!');
+                    return;
+                }
+
+                // Validar sobreposição de horas
+                const validacao = validarHoras(registo.horaInicio, registo.horaFim);
+                if (!validacao.valido) {
+                    alert(validacao.mensagem);
+                    return;
+                }
+
+                setSyncing(true);
+                const id = Date.now();
+                const duracao = calcularDuracao(registo.horaInicio, registo.horaFim);
+                const dataHoraRegisto = new Date().toLocaleString('pt-PT');
+
+                const novoRegisto = {
+                    ...registo,
+                    id,
+                    operador: operadorNome,
+                    duracao,
+                    synced: false
+                };
+
+                // Dados para Produção
+                const dadosProducao = {
+                    ID: id.toString(),
+                    Data: registo.data,
+                    Artigo: registo.artigo,
+                    TipoCaixa: registo.tipoCaixa,
+                    Operacao: registo.operacao,
+                    UnidadeProducao: registo.unidadeProducao,
+                    Colaborador: operadorNome,
+                    Quantidade: registo.quantidade,
+                    HoraInicio: registo.horaInicio,
+                    HoraFim: registo.horaFim,
+                    Duracao: duracao,
+                    Comentarios: registo.comentarios || '',
+                    DataHoraRegisto: dataHoraRegisto
+                };
+
+                const enviado = await enviarParaPowerAutomate(POWER_AUTOMATE_PRODUCAO, dadosProducao);
+
+                novoRegisto.synced = enviado;
+                setRegistos([...registos, novoRegisto]);
+                
+                // Modo rápido: manter data, programa e preencher hora início com última hora fim
+                if (modoRapido) {
+                    setRegisto({
+                        data: registo.data,
+                        tipologia: registo.tipologia, // Manter programa
+                        artigo: '',
+                        tipoCaixa: '',
+                        operacao: '',
+                        unidadeProducao: '',
+                        horaInicio: registo.horaFim, // Começa onde terminou
+                        horaFim: '',
+                        comentarios: ''
+                    });
+                } else {
+                    setRegisto({
+                        data: new Date().toISOString().split('T')[0],
+                        tipologia: registo.tipologia, // Manter programa
+                        artigo: '',
+                        tipoCaixa: '',
+                        operacao: '',
+                        unidadeProducao: '',
+                        horaInicio: '',
+                        horaFim: '',
+                        comentarios: ''
+                    });
+                }
+
+                setSyncing(false);
+                
+                if (enviado) {
+                    alert('✅ Registo guardado e enviado para Excel!');
+                } else {
+                    alert('✅ Registo guardado localmente!\n\n⚠️ Será sincronizado quando houver ligação.');
+                }
+            };
+
+            const sincronizarPendentes = async () => {
+                const pendentes = registos.filter(r => !r.synced);
+                if (pendentes.length === 0) {
+                    alert('Todos os registos estão sincronizados!');
+                    return;
+                }
+
+                setSyncing(true);
+                let sincronizados = 0;
+                const dataHoraRegisto = new Date().toLocaleString('pt-PT');
+
+                for (const r of pendentes) {
+                    const dadosProducao = {
+                        ID: r.id.toString(),
+                        Data: r.data,
+                        Artigo: r.artigo,
+                        TipoCaixa: r.tipoCaixa,
+                        Operacao: r.operacao,
+                        UnidadeProducao: r.unidadeProducao,
+                        Colaborador: r.operador,
+                        Quantidade: r.quantidade,
+                        HoraInicio: r.horaInicio,
+                        HoraFim: r.horaFim,
+                        Duracao: r.duracao,
+                        Comentarios: r.comentarios || '',
+                        DataHoraRegisto: dataHoraRegisto
+                    };
+
+                    const enviado = await enviarParaPowerAutomate(POWER_AUTOMATE_PRODUCAO, dadosProducao);
+                    
+                    if (enviado) {
+                        for (const p of r.perturbacoes) {
+                            await enviarParaPowerAutomate(POWER_AUTOMATE_PERTURBACOES, {
+                                IDRegisto: r.id.toString(),
+                                Data: r.data,
+                                Colaborador: r.operador,
+                                TipoPerturbacao: p.descricao,
+                                HoraInicio: p.horaInicio,
+                                HoraFim: p.horaFim,
+                                Duracao: p.duracao,
+                                DataHoraRegisto: dataHoraRegisto
+                            });
+                        }
+                        r.synced = true;
+                        sincronizados++;
+                    }
+                }
+
+                setRegistos([...registos]);
+                setSyncing(false);
+                alert(`✅ ${sincronizados} de ${pendentes.length} registos sincronizados!`);
+            };
+
+            const adicionarPerturbacao = async () => {
+                if (!perturbacao.descricao || !perturbacao.horaInicio || !perturbacao.horaFim) {
+                    alert('Preencha todos os campos da perturbação!');
+                    return;
+                }
+
+                setSyncing(true);
+                const id = Date.now();
+                const duracao = calcularDuracao(perturbacao.horaInicio, perturbacao.horaFim);
+                const dataHoraRegisto = new Date().toLocaleString('pt-PT');
+
+                const novaPerturbacao = {
+                    id,
+                    data: perturbacao.data,
+                    operador: operadorNome,
+                    descricao: perturbacao.descricao,
+                    horaInicio: perturbacao.horaInicio,
+                    horaFim: perturbacao.horaFim,
+                    duracao,
+                    synced: false
+                };
+
+                // Enviar para Power Automate
+                const enviado = await enviarParaPowerAutomate(POWER_AUTOMATE_PERTURBACOES, {
+                    IDRegisto: id.toString(),
+                    Data: perturbacao.data,
+                    Colaborador: operadorNome,
+                    TipoPerturbacao: perturbacao.descricao,
+                    HoraInicio: perturbacao.horaInicio,
+                    HoraFim: perturbacao.horaFim,
+                    Duracao: duracao,
+                    DataHoraRegisto: dataHoraRegisto
+                });
+
+                novaPerturbacao.synced = enviado;
+                setRegistosPerturbacoes([...registosPerturbacoes, novaPerturbacao]);
+
+                setPerturbacao({
+                    data: perturbacao.data,
+                    descricao: '',
+                    horaInicio: perturbacao.horaFim,
+                    horaFim: ''
+                });
+
+                setSyncing(false);
+                setView('form');
+                
+                if (enviado) {
+                    alert('✅ Perturbação registada e enviada!');
+                } else {
+                    alert('✅ Perturbação guardada localmente!');
+                }
+            };
+
+            const removerPerturbacao = (id) => {
+                if (confirm('Eliminar esta perturbação?')) {
+                    setRegistosPerturbacoes(registosPerturbacoes.filter(p => p.id !== id));
+                }
+            };
+
+            const eliminarRegisto = (id) => {
+                if (confirm('Eliminar este registo?')) {
+                    setRegistos(registos.filter(r => r.id !== id));
+                }
+            };
+
+            const limparSincronizados = () => {
+                const pendentes = registos.filter(r => !r.synced);
+                const sincronizados = registos.filter(r => r.synced).length;
+                if (sincronizados === 0) {
+                    alert('Não há registos sincronizados para limpar.');
+                    return;
+                }
+                if (confirm(`Limpar ${sincronizados} registos já sincronizados?\n\nOs registos pendentes serão mantidos.`)) {
+                    setRegistos(pendentes);
+                }
+            };
+
+            // Exportar Excel local (backup)
+            const exportarExcelLocal = () => {
+                if (registos.length === 0) {
+                    alert('Não há registos para exportar!');
+                    return;
+                }
+
+                const dataAtual = new Date().toISOString().split('T')[0];
+                const nomeFile = `Registos_${operadorNome.replace(/\s+/g, '_')}_${dataAtual}.xlsx`;
+
+                const wb = XLSX.utils.book_new();
+
+                const dadosProducao = registos.map(r => ({
+                    'ID': r.id,
+                    'Data': r.data,
+                    'Artigo': r.artigo,
+                    'Tipo Caixa': r.tipoCaixa,
+                    'Operação': r.operacao,
+                    'Unidade Produção': r.unidadeProducao,
+                    'Colaborador': r.operador,
+                    'Quantidade': r.quantidade,
+                    'Hora Início': r.horaInicio,
+                    'Hora Fim': r.horaFim,
+                    'Duração': r.duracao,
+                    'Comentários': r.comentarios,
+                    'Sincronizado': r.synced ? 'Sim' : 'Não'
+                }));
+                const wsProducao = XLSX.utils.json_to_sheet(dadosProducao);
+                XLSX.utils.book_append_sheet(wb, wsProducao, 'Produção');
+
+                const todasPerturbacoes = [];
+                registos.forEach(r => {
+                    r.perturbacoes.forEach(p => {
+                        todasPerturbacoes.push({
+                            'ID Registo': r.id,
+                            'Data': r.data,
+                            'Colaborador': r.operador,
+                            'Perturbação': p.descricao,
+                            'Hora Início': p.horaInicio,
+                            'Hora Fim': p.horaFim,
+                            'Duração': p.duracao
+                        });
+                    });
+                });
+                
+                if (todasPerturbacoes.length > 0) {
+                    const wsPerturbacoes = XLSX.utils.json_to_sheet(todasPerturbacoes);
+                    XLSX.utils.book_append_sheet(wb, wsPerturbacoes, 'Perturbações');
+                }
+
+                XLSX.writeFile(wb, nomeFile);
+                alert(`✅ Backup guardado!\n\n📁 ${nomeFile}`);
+            };
+
+            // Funções de administração
+            const verificarPassword = () => {
+                if (adminPassword === ADMIN_PASSWORD) {
+                    setAdminAuthed(true);
+                    setAdminPassword('');
+                } else {
+                    alert('Password incorreta!');
+                }
+            };
+
+            const adicionarArtigo = () => {
+                if (!novoItem.artigo || !novoItem.tipo) {
+                    alert('Preencha o nome do artigo e o tipo!');
+                    return;
+                }
+                if (todosArtigos.find(a => a.Artigo === novoItem.artigo)) {
+                    alert('Este artigo já existe!');
+                    return;
+                }
+                setCustomArtigos([...customArtigos, { Artigo: novoItem.artigo, Tipo: novoItem.tipo }]);
+                setNovoItem({ ...novoItem, artigo: '', tipo: '' });
+                alert('✅ Artigo adicionado!');
+            };
+
+            const adicionarOperacao = () => {
+                if (!novoItem.operacao || !novoItem.unidade) {
+                    alert('Preencha o nome da operação e a unidade!');
+                    return;
+                }
+                if (todasOperacoes.find(o => o.Op === novoItem.operacao)) {
+                    alert('Esta operação já existe!');
+                    return;
+                }
+                setCustomOperacoes([...customOperacoes, { Op: novoItem.operacao, Unidade: novoItem.unidade }]);
+                setNovoItem({ ...novoItem, operacao: '', unidade: '' });
+                alert('✅ Operação adicionada!');
+            };
+
+            const adicionarPerturbacaoAdmin = () => {
+                if (!novoItem.perturbacao) {
+                    alert('Preencha o nome da perturbação!');
+                    return;
+                }
+                if (todasPerturbacoes.includes(novoItem.perturbacao)) {
+                    alert('Esta perturbação já existe!');
+                    return;
+                }
+                setCustomPerturbacoes([...customPerturbacoes, novoItem.perturbacao]);
+                setNovoItem({ ...novoItem, perturbacao: '' });
+                alert('✅ Perturbação adicionada!');
+            };
+
+            const removerArtigoCustom = (artigo) => {
+                if (confirm(`Remover artigo "${artigo}"?`)) {
+                    setCustomArtigos(customArtigos.filter(a => a.Artigo !== artigo));
+                }
+            };
+
+            const removerOperacaoCustom = (operacao) => {
+                if (confirm(`Remover operação "${operacao}"?`)) {
+                    setCustomOperacoes(customOperacoes.filter(o => o.Op !== operacao));
+                }
+            };
+
+            const removerPerturbacaoCustom = (perturbacao) => {
+                if (confirm(`Remover perturbação "${perturbacao}"?`)) {
+                    setCustomPerturbacoes(customPerturbacoes.filter(p => p !== perturbacao));
+                }
+            };
+
+            const adicionarColaborador = () => {
+                if (!novoItem.colaborador) {
+                    alert('Preencha o nome do colaborador!');
+                    return;
+                }
+                if (todosColaboradores.includes(novoItem.colaborador)) {
+                    alert('Este colaborador já existe!');
+                    return;
+                }
+                setCustomColaboradores([...customColaboradores, novoItem.colaborador]);
+                setNovoItem({ ...novoItem, colaborador: '' });
+                alert('✅ Colaborador adicionado!');
+            };
+
+            const removerColaboradorCustom = (colaborador) => {
+                if (confirm(`Remover colaborador "${colaborador}"?`)) {
+                    setCustomColaboradores(customColaboradores.filter(c => c !== colaborador));
+                }
+            };
+
+            // Painel de Administração
+            if (showAdmin) {
+                if (!adminAuthed) {
+                    return (
+                        <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '100%', maxWidth: '400px' }}>
+                                <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                    <div style={{ fontSize: '60px', marginBottom: '10px' }}>🔐</div>
+                                    <h1 style={{ fontSize: '20px', color: '#1e1e1e', margin: '0 0 10px 0' }}>Administração</h1>
+                                    <p style={{ color: '#64748b', fontSize: '14px' }}>Introduza a password de administrador</p>
+                                </div>
+                                <input
+                                    type="password"
+                                    value={adminPassword}
+                                    onChange={(e) => setAdminPassword(e.target.value)}
+                                    onKeyPress={(e) => e.key === 'Enter' && verificarPassword()}
+                                    placeholder="Password..."
+                                    style={{ width: '100%', padding: '15px', border: '2px solid #e2e8f0', borderRadius: '12px', fontSize: '16px', marginBottom: '15px' }}
+                                />
+                                <button onClick={verificarPassword} style={{ width: '100%', padding: '15px', background: '#1e1e1e', color: 'white', border: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: '600', marginBottom: '10px' }}>
+                                    Entrar
+                                </button>
+                                <button onClick={() => setShowAdmin(false)} style={{ width: '100%', padding: '12px', background: 'transparent', color: '#64748b', border: 'none', fontSize: '14px' }}>
+                                    ← Voltar
+                                </button>
+                            </div>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div style={{ minHeight: '100vh', background: '#1e1e1e' }}>
+                        <div style={{ background: '#2d2d2d', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h1 style={{ margin: 0, fontSize: '24px' }}>⚙️ Administração</h1>
+                                <button onClick={() => { setShowAdmin(false); setAdminAuthed(false); }} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px' }}>
+                                    ✕ Fechar
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Tabs */}
+                        <div style={{ display: 'flex', background: '#2d2d2d', borderBottom: '1px solid #444', flexWrap: 'wrap' }}>
+                            {['importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores'].map(tab => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setAdminTab(tab)}
+                                    style={{
+                                        flex: 1,
+                                        minWidth: '80px',
+                                        padding: '12px 8px',
+                                        background: adminTab === tab ? '#1e1e1e' : 'transparent',
+                                        color: adminTab === tab ? '#3b82f6' : '#888',
+                                        border: 'none',
+                                        borderBottom: adminTab === tab ? '2px solid #3b82f6' : '2px solid transparent',
+                                        fontSize: '12px',
+                                        fontWeight: '600'
+                                    }}
+                                >
+                                    {tab === 'artigos' ? '📦 Artigos' : tab === 'operacoes' ? '🔧 Operações' : tab === 'perturbacoes' ? '⚠️ Perturb.' : tab === 'colaboradores' ? '👤 Colab.' : '📥 Import'}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            {/* Tab Importar */}
+                            {adminTab === 'importar' && (
+                                <div>
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📥 Importar Tabela Excel</h3>
+                                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '15px' }}>
+                                            Carregue um ficheiro Excel (.xlsx) com a estrutura:<br/>
+                                            <span style={{ color: '#3b82f6' }}>Unidade Produção | Programa ANN | Operação | Artigos...</span>
+                                        </p>
+                                        <input
+                                            type="file"
+                                            accept=".xlsx,.xls"
+                                            onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+                                                
+                                                try {
+                                                    const data = await file.arrayBuffer();
+                                                    const workbook = XLSX.read(data);
+                                                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                                                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                                                    
+                                                    // Processar linhas (ignorar cabeçalho)
+                                                    const novosArtigos = new Set();
+                                                    const novasOperacoes = [];
+                                                    const novosProgramas = new Map();
+                                                    let programaAtual = '';
+                                                    
+                                                    // Função para normalizar nome do programa
+                                                    const normalizarPrograma = (prog) => {
+                                                        if (!prog) return '';
+                                                        let p = prog.toString().trim();
+                                                        // Normalizar KC390/Kc390/Kc 390
+                                                        if (p.toLowerCase().replace(/\s/g, '').includes('kc390')) {
+                                                            return 'KC390';
+                                                        }
+                                                        return p;
+                                                    };
+                                                    
+                                                    // Função para determinar se é fração baseado na unidade
+                                                    const isFracao = (unidade) => {
+                                                        return unidade && unidade.toLowerCase().includes('vora 2');
+                                                    };
+                                                    
+                                                    rows.slice(1).forEach(row => {
+                                                        if (!row[2]) return; // Sem operação, ignorar
+                                                        
+                                                        const unidade = (row[0] || '').toString().trim();
+                                                        const programaRaw = (row[1] || '').toString().trim();
+                                                        const operacao = (row[2] || '').toString().trim();
+                                                        
+                                                        // Atualizar programa atual se preenchido
+                                                        if (programaRaw) {
+                                                            programaAtual = normalizarPrograma(programaRaw);
+                                                        }
+                                                        
+                                                        // Determinar tipo (programa base ou fração)
+                                                        let tipoPrograma = programaAtual;
+                                                        if (isFracao(unidade) && (programaAtual === 'E2' || programaAtual === 'KC390')) {
+                                                            tipoPrograma = programaAtual + ' - Frações';
+                                                        }
+                                                        
+                                                        // Extrair artigos (colunas 3+)
+                                                        const artigosOp = [];
+                                                        for (let i = 3; i < row.length; i++) {
+                                                            const art = (row[i] || '').toString().trim();
+                                                            if (art && art.toLowerCase() !== 'artigos') {
+                                                                artigosOp.push(art);
+                                                                novosArtigos.add(JSON.stringify({ Artigo: art, Tipo: tipoPrograma }));
+                                                            }
+                                                        }
+                                                        
+                                                        // Adicionar programa
+                                                        if (tipoPrograma && !novosProgramas.has(tipoPrograma)) {
+                                                            novosProgramas.set(tipoPrograma, {
+                                                                id: tipoPrograma,
+                                                                nome: tipoPrograma,
+                                                                icon: tipoPrograma.includes('Fração') ? '📦' : '✈️'
+                                                            });
+                                                        }
+                                                        
+                                                        if (operacao && artigosOp.length > 0) {
+                                                            novasOperacoes.push({
+                                                                Op: operacao,
+                                                                Unidade: unidade,
+                                                                Artigos: artigosOp
+                                                            });
+                                                        }
+                                                    });
+                                                    
+                                                    // Converter para arrays
+                                                    const artigosArray = Array.from(novosArtigos).map(a => JSON.parse(a));
+                                                    const programasArray = Array.from(novosProgramas.values());
+                                                    
+                                                    // Ordenar programas
+                                                    programasArray.sort((a, b) => a.nome.localeCompare(b.nome));
+                                                    
+                                                    // Guardar em localStorage
+                                                    localStorage.setItem('importedArtigos', JSON.stringify(artigosArray));
+                                                    localStorage.setItem('importedOperacoes', JSON.stringify(novasOperacoes));
+                                                    localStorage.setItem('importedProgramas', JSON.stringify(programasArray));
+                                                    
+                                                    alert(`✅ Importação concluída!\n\n${programasArray.length} Programas\n${artigosArray.length} Artigos\n${novasOperacoes.length} Operações\n\nRecarregue a página para aplicar.`);
+                                                    
+                                                } catch (err) {
+                                                    console.error(err);
+                                                    alert('❌ Erro ao processar ficheiro: ' + err.message);
+                                                }
+                                                
+                                                e.target.value = '';
+                                            }}
+                                            style={{ display: 'none' }}
+                                            id="fileImport"
+                                        />
+                                        <label 
+                                            htmlFor="fileImport"
+                                            style={{ 
+                                                display: 'block',
+                                                width: '100%', 
+                                                padding: '20px', 
+                                                background: '#3d3d3d', 
+                                                color: '#3b82f6', 
+                                                border: '2px dashed #3b82f6', 
+                                                borderRadius: '12px', 
+                                                textAlign: 'center',
+                                                cursor: 'pointer',
+                                                fontWeight: '600'
+                                            }}
+                                        >
+                                            📂 Selecionar ficheiro Excel
+                                        </label>
+                                    </div>
+                                    
+                                    {/* Mostrar dados importados */}
+                                    {localStorage.getItem('importedArtigos') && (
+                                        <div style={{ background: '#1a3a1a', borderRadius: '12px', padding: '15px', marginBottom: '15px' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <div style={{ color: '#4ade80', fontWeight: '600' }}>✅ Dados importados ativos</div>
+                                                    <div style={{ color: '#86efac', fontSize: '12px', marginTop: '5px' }}>
+                                                        {JSON.parse(localStorage.getItem('importedArtigos') || '[]').length} artigos, 
+                                                        {JSON.parse(localStorage.getItem('importedOperacoes') || '[]').length} operações
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm('Limpar dados importados?')) {
+                                                            localStorage.removeItem('importedArtigos');
+                                                            localStorage.removeItem('importedOperacoes');
+                                                            localStorage.removeItem('importedProgramas');
+                                                            alert('Dados limpos. Recarregue a página.');
+                                                        }
+                                                    }}
+                                                    style={{ background: '#dc2626', color: 'white', border: 'none', padding: '8px 12px', borderRadius: '6px', fontSize: '12px' }}
+                                                >
+                                                    🗑️ Limpar
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '15px' }}>
+                                        <h4 style={{ color: '#888', margin: '0 0 10px 0', fontSize: '13px' }}>📋 Formato esperado do Excel:</h4>
+                                        <div style={{ background: '#1e1e1e', borderRadius: '8px', padding: '10px', fontSize: '11px', color: '#aaa', overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                                <thead>
+                                                    <tr style={{ color: '#3b82f6' }}>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>Unidade</th>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>Programa</th>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>Operação</th>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>Artigo 1</th>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>Artigo 2</th>
+                                                        <th style={{ padding: '5px', textAlign: 'left' }}>...</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td style={{ padding: '5px' }}>Evora1-Sold.</td>
+                                                        <td style={{ padding: '5px' }}>E2</td>
+                                                        <td style={{ padding: '5px' }}>Soldadura...</td>
+                                                        <td style={{ padding: '5px' }}>E2-Lower</td>
+                                                        <td style={{ padding: '5px' }}>E2-Upper</td>
+                                                        <td style={{ padding: '5px' }}>...</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Tab Artigos */}
+                            {adminTab === 'artigos' && (
+                                <div>
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>➕ Adicionar Artigo</h3>
+                                        <input
+                                            type="text"
+                                            value={novoItem.artigo}
+                                            onChange={(e) => setNovoItem({ ...novoItem, artigo: e.target.value })}
+                                            placeholder="Nome do artigo (ex: E2-Novo Artigo)"
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        />
+                                        <input
+                                            type="text"
+                                            value={novoItem.tipo}
+                                            onChange={(e) => setNovoItem({ ...novoItem, tipo: e.target.value })}
+                                            placeholder="Tipo/Categoria (ex: E2-Upper /Lower)"
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        />
+                                        <button onClick={adicionarArtigo} style={{ width: '100%', padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}>
+                                            Adicionar Artigo
+                                        </button>
+                                    </div>
+
+                                    {customArtigos.length > 0 && (
+                                        <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                            <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Artigos Personalizados ({customArtigos.length})</h3>
+                                            {customArtigos.map((a, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                    <div style={{ color: 'white' }}>
+                                                        <div style={{ fontWeight: '600' }}>{a.Artigo}</div>
+                                                        <div style={{ fontSize: '12px', color: '#888' }}>{a.Tipo}</div>
+                                                    </div>
+                                                    <button onClick={() => removerArtigoCustom(a.Artigo)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Tab Operações */}
+                            {adminTab === 'operacoes' && (
+                                <div>
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>➕ Adicionar Operação</h3>
+                                        <input
+                                            type="text"
+                                            value={novoItem.operacao}
+                                            onChange={(e) => setNovoItem({ ...novoItem, operacao: e.target.value })}
+                                            placeholder="Nome da operação (ex: E2-Nova Operação)"
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        />
+                                        <select
+                                            value={novoItem.unidade}
+                                            onChange={(e) => setNovoItem({ ...novoItem, unidade: e.target.value })}
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        >
+                                            <option value="">Selecionar unidade...</option>
+                                            <option value="Evora1-Soldadura">Evora1-Soldadura</option>
+                                            <option value="Evora1-Montagem">Evora1-Montagem</option>
+                                            <option value="Evora1-Embalamento">Evora1-Embalamento</option>
+                                            <option value="Évora 2-Montagem">Évora 2-Montagem</option>
+                                            <option value="Transportes">Transportes</option>
+                                            <option value="Geral">Geral</option>
+                                        </select>
+                                        <button onClick={adicionarOperacao} style={{ width: '100%', padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}>
+                                            Adicionar Operação
+                                        </button>
+                                    </div>
+
+                                    {customOperacoes.length > 0 && (
+                                        <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                            <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Operações Personalizadas ({customOperacoes.length})</h3>
+                                            {customOperacoes.map((o, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                    <div style={{ color: 'white' }}>
+                                                        <div style={{ fontWeight: '600', fontSize: '14px' }}>{o.Op}</div>
+                                                        <div style={{ fontSize: '12px', color: '#888' }}>{o.Unidade}</div>
+                                                    </div>
+                                                    <button onClick={() => removerOperacaoCustom(o.Op)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Tab Perturbações */}
+                            {adminTab === 'perturbacoes' && (
+                                <div>
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>➕ Adicionar Perturbação</h3>
+                                        <input
+                                            type="text"
+                                            value={novoItem.perturbacao}
+                                            onChange={(e) => setNovoItem({ ...novoItem, perturbacao: e.target.value })}
+                                            placeholder="Nome da perturbação..."
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        />
+                                        <button onClick={adicionarPerturbacaoAdmin} style={{ width: '100%', padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}>
+                                            Adicionar Perturbação
+                                        </button>
+                                    </div>
+
+                                    {customPerturbacoes.length > 0 && (
+                                        <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                            <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Perturbações Personalizadas ({customPerturbacoes.length})</h3>
+                                            {customPerturbacoes.map((p, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                    <div style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>{p}</div>
+                                                    <button onClick={() => removerPerturbacaoCustom(p)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Tab Colaboradores */}
+                            {adminTab === 'colaboradores' && (
+                                <div>
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>➕ Adicionar Colaborador</h3>
+                                        <input
+                                            type="text"
+                                            value={novoItem.colaborador}
+                                            onChange={(e) => setNovoItem({ ...novoItem, colaborador: e.target.value })}
+                                            placeholder="Nome completo do colaborador..."
+                                            style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '8px', fontSize: '14px', marginBottom: '10px', background: '#3d3d3d', color: 'white' }}
+                                        />
+                                        <button onClick={adicionarColaborador} style={{ width: '100%', padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}>
+                                            Adicionar Colaborador
+                                        </button>
+                                    </div>
+
+                                    {customColaboradores.length > 0 && (
+                                        <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                            <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Colaboradores Personalizados ({customColaboradores.length})</h3>
+                                            {customColaboradores.map((c, i) => (
+                                                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                    <div style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>{c}</div>
+                                                    <button onClick={() => removerColaboradorCustom(c)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Vista de Resumo do Dia
+            if (showResumo) {
+                const registosDoDia = getRegistosDoDia();
+                const perturbacoesDoDia = getPerturbacoesDoDia();
+                const totais = calcularTotaisDia();
+
+                return (
+                    <div style={{ minHeight: '100vh', background: '#f0f4f8' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                            <button onClick={() => setShowResumo(false)} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', marginBottom: '15px' }}>
+                                ← Voltar
+                            </button>
+                            <h1 style={{ margin: 0, fontSize: '24px' }}>📊 Resumo do Dia</h1>
+                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{registo.data} - {operadorNome}</p>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            {/* Totais */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                                <div style={{ background: 'white', borderRadius: '12px', padding: '15px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                    <div style={{ fontSize: '28px', fontWeight: '700', color: '#7c3aed' }}>{totais.totalRegistos}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Operações</div>
+                                </div>
+                                <div style={{ background: 'white', borderRadius: '12px', padding: '15px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                    <div style={{ fontSize: '28px', fontWeight: '700', color: '#059669' }}>{totais.totalTempo}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Tempo Produção</div>
+                                </div>
+                                <div style={{ background: 'white', borderRadius: '12px', padding: '15px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                    <div style={{ fontSize: '28px', fontWeight: '700', color: '#dc2626' }}>{totais.totalPerturbacoes}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Perturbações</div>
+                                    {totais.totalPerturbacoes > 0 && (
+                                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>{totais.totalTempoPerturbacoes}</div>
+                                    )}
+                                </div>
+                                <div style={{ background: 'white', borderRadius: '12px', padding: '15px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                    <div style={{ fontSize: '28px', fontWeight: '700', color: '#0078d4' }}>{totais.totalTempoDia}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Tempo Total</div>
+                                </div>
+                            </div>
+
+                            {/* Lista de operações */}
+                            <h3 style={{ margin: '0 0 15px 0', color: '#334155', fontSize: '16px' }}>📦 Operações ({registosDoDia.length})</h3>
+                            
+                            {registosDoDia.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', background: 'white', borderRadius: '12px', marginBottom: '20px' }}>
+                                    <p style={{ margin: 0 }}>Ainda não há operações</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+                                    {registosDoDia.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)).map((r, idx) => (
+                                        <div key={r.id} style={{ background: 'white', borderRadius: '12px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #7c3aed' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                                                        <span style={{ background: '#f3e8ff', color: '#7c3aed', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+                                                            {r.horaInicio} - {r.horaFim}
+                                                        </span>
+                                                        <span style={{ fontSize: '12px', color: '#64748b' }}>{r.duracao}</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '700', color: '#334155', marginBottom: '3px' }}>{r.artigo}</div>
+                                                    <div style={{ fontSize: '13px', color: '#64748b' }}>{r.operacao}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Lista de perturbações */}
+                            <h3 style={{ margin: '0 0 15px 0', color: '#dc2626', fontSize: '16px' }}>⚠️ Perturbações ({perturbacoesDoDia.length})</h3>
+                            
+                            {perturbacoesDoDia.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', background: 'white', borderRadius: '12px' }}>
+                                    <p style={{ margin: 0 }}>Sem perturbações</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                    {perturbacoesDoDia.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)).map((p, idx) => (
+                                        <div key={p.id} style={{ background: 'white', borderRadius: '12px', padding: '15px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: '4px solid #dc2626' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                                                <span style={{ background: '#fef2f2', color: '#dc2626', padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '600' }}>
+                                                    {p.horaInicio} - {p.horaFim}
+                                                </span>
+                                                <span style={{ fontSize: '12px', color: '#64748b' }}>{p.duracao}</span>
+                                            </div>
+                                            <div style={{ fontWeight: '600', color: '#dc2626' }}>{p.descricao}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Ecrã de configuração de URL
+            if (configUrl) {
+                return (
+                    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '100%', maxWidth: '400px' }}>
+                            <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                                <div style={{ fontSize: '60px', marginBottom: '10px' }}>⚠️</div>
+                                <h1 style={{ fontSize: '20px', color: '#0078d4', margin: '0 0 10px 0' }}>Configuração Necessária</h1>
+                                <p style={{ color: '#64748b', fontSize: '14px' }}>Os URLs do Power Automate não estão configurados.</p>
+                            </div>
+                            <div style={{ background: '#f0f9ff', padding: '15px', borderRadius: '12px', marginBottom: '20px' }}>
+                                <p style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#0369a1' }}>
+                                    <strong>Para configurar:</strong>
+                                </p>
+                                <ol style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#0369a1' }}>
+                                    <li>Siga as instruções do guia</li>
+                                    <li>Crie os 2 flows no Power Automate</li>
+                                    <li>Cole os URLs no ficheiro HTML</li>
+                                    <li>Guarde e recarregue a página</li>
+                                </ol>
+                            </div>
+                            <button
+                                onClick={() => setConfigUrl(false)}
+                                style={{
+                                    width: '100%',
+                                    padding: '15px',
+                                    background: '#64748b',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontSize: '16px',
+                                    fontWeight: '600'
+                                }}
+                            >
+                                Continuar sem sincronização
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Ecrã de Resumo Final do Dia (após terminar)
+            if (resumoFinalDia && !configured) {
+                return (
+                    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}>
+                        <div style={{ padding: '40px 20px 20px 20px', color: 'white', textAlign: 'center' }}>
+                            <div style={{ fontSize: '60px', marginBottom: '10px' }}>✅</div>
+                            <h1 style={{ margin: '0 0 5px 0', fontSize: '24px' }}>Dia Terminado!</h1>
+                            <p style={{ margin: 0, opacity: 0.9 }}>{resumoFinalDia.colaborador}</p>
+                            <p style={{ margin: '5px 0 0 0', opacity: 0.8, fontSize: '14px' }}>{resumoFinalDia.data}</p>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            {/* Totais */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', fontWeight: '700', color: '#059669' }}>{resumoFinalDia.totais.totalRegistos}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Operações</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', fontWeight: '700', color: '#0078d4' }}>{resumoFinalDia.totais.totalTempo}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Tempo Produção</div>
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', fontWeight: '700', color: '#dc2626' }}>{resumoFinalDia.totais.totalPerturbacoes}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Perturbações</div>
+                                    {resumoFinalDia.totais.totalPerturbacoes > 0 && (
+                                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>{resumoFinalDia.totais.totalTempoPerturbacoes}</div>
+                                    )}
+                                </div>
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', textAlign: 'center' }}>
+                                    <div style={{ fontSize: '32px', fontWeight: '700', color: '#7c3aed' }}>{resumoFinalDia.totais.totalTempoDia}</div>
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>Tempo Total</div>
+                                </div>
+                            </div>
+
+                            {/* Lista de operações */}
+                            {resumoFinalDia.registos.length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', marginBottom: '15px' }}>
+                                    <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#334155' }}>📦 Operações realizadas</h3>
+                                    {resumoFinalDia.registos.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)).map((r, idx) => (
+                                        <div key={idx} style={{ padding: '10px 0', borderBottom: idx < resumoFinalDia.registos.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                                            <div>
+                                                <span style={{ fontSize: '12px', color: '#059669', fontWeight: '600' }}>{r.horaInicio}-{r.horaFim} ({r.duracao})</span>
+                                                <div style={{ fontWeight: '600', color: '#334155', fontSize: '14px' }}>{r.artigo}</div>
+                                                <div style={{ fontSize: '12px', color: '#64748b' }}>{r.operacao}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Lista de perturbações */}
+                            {resumoFinalDia.perturbacoes && resumoFinalDia.perturbacoes.length > 0 && (
+                                <div style={{ background: 'rgba(255,255,255,0.95)', borderRadius: '12px', padding: '15px', marginBottom: '15px' }}>
+                                    <h3 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#dc2626' }}>⚠️ Perturbações</h3>
+                                    {resumoFinalDia.perturbacoes.sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)).map((p, idx) => (
+                                        <div key={idx} style={{ padding: '10px 0', borderBottom: idx < resumoFinalDia.perturbacoes.length - 1 ? '1px solid #e2e8f0' : 'none' }}>
+                                            <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: '600' }}>{p.horaInicio}-{p.horaFim} ({p.duracao})</span>
+                                            <div style={{ fontWeight: '600', color: '#dc2626', fontSize: '14px' }}>{p.descricao}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Botão para novo colaborador */}
+                            <button
+                                onClick={() => setResumoFinalDia(null)}
+                                style={{
+                                    width: '100%',
+                                    padding: '18px',
+                                    background: 'white',
+                                    color: '#059669',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontSize: '18px',
+                                    fontWeight: '700',
+                                    boxShadow: '0 4px 15px rgba(0,0,0,0.2)'
+                                }}
+                            >
+                                👤 Próximo Colaborador
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Ecrã de configuração inicial
+            if (!configured) {
+                return (
+                    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ background: 'white', borderRadius: '20px', padding: '30px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+                            <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+                                <div style={{ fontSize: '60px', marginBottom: '10px' }}>🏭</div>
+                                <h1 style={{ fontSize: '24px', color: '#0078d4', margin: '0 0 5px 0' }}>Registo de Produção</h1>
+                                <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Évora - Microsoft 365</p>
+                            </div>
+
+                            <div style={{ marginBottom: '30px' }}>
+                                <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#334155' }}>👤 O seu nome</label>
+                                <select 
+                                    value={operadorNome}
+                                    onChange={(e) => setOperadorNome(e.target.value)}
+                                    style={{ width: '100%', padding: '15px', fontSize: '18px', border: '2px solid #e2e8f0', borderRadius: '12px', outline: 'none', background: 'white' }}
+                                >
+                                    <option value="">Selecionar...</option>
+                                    {todosColaboradores.map((t, i) => (
+                                        <option key={i} value={t}>{t}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button
+                                onClick={saveOperador}
+                                style={{
+                                    width: '100%',
+                                    padding: '18px',
+                                    background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '12px',
+                                    fontSize: '18px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 15px rgba(0,120,212,0.4)'
+                                }}
+                            >
+                                Começar ➔
+                            </button>
+                            
+                            <button
+                                onClick={() => setShowAdmin(true)}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px',
+                                    background: 'transparent',
+                                    color: '#64748b',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '10px',
+                                    fontSize: '14px',
+                                    marginTop: '15px',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                🔐 Administração
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Vista de adicionar perturbação
+            if (view === 'perturbacao') {
+                return (
+                    <div style={{ minHeight: '100vh', background: '#fff5f5' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                            <button onClick={() => setView('form')} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', marginBottom: '15px' }}>
+                                ← Voltar
+                            </button>
+                            <h1 style={{ margin: 0, fontSize: '24px' }}>⚠️ Registar Perturbação</h1>
+                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operadorNome}</p>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+                                
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>📅 Data</label>
+                                    <input
+                                        type="date"
+                                        value={perturbacao.data}
+                                        onChange={(e) => setPerturbacao({...perturbacao, data: e.target.value})}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #fecaca', borderRadius: '12px', fontSize: '16px' }}
+                                    />
+                                </div>
+
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Tipo de Perturbação</label>
+                                    <select
+                                        value={perturbacao.descricao}
+                                        onChange={(e) => setPerturbacao({...perturbacao, descricao: e.target.value})}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #fecaca', borderRadius: '12px', fontSize: '16px' }}
+                                    >
+                                        <option value="">Selecionar...</option>
+                                        {todasPerturbacoes.map((p, i) => (
+                                            <option key={i} value={p}>{p}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Hora Início</label>
+                                        <input
+                                            type="time"
+                                            value={perturbacao.horaInicio}
+                                            onChange={(e) => setPerturbacao({...perturbacao, horaInicio: e.target.value})}
+                                            style={{ width: '100%', padding: '15px', border: '2px solid #fecaca', borderRadius: '12px' }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>Hora Fim</label>
+                                        <input
+                                            type="time"
+                                            value={perturbacao.horaFim}
+                                            onChange={(e) => setPerturbacao({...perturbacao, horaFim: e.target.value})}
+                                            style={{ width: '100%', padding: '15px', border: '2px solid #fecaca', borderRadius: '12px' }}
+                                        />
+                                    </div>
+                                </div>
+
+                                {perturbacao.horaInicio && perturbacao.horaFim && (
+                                    <div style={{ marginBottom: '20px', padding: '12px', background: '#fef2f2', borderRadius: '8px', textAlign: 'center', fontWeight: '700', color: '#dc2626', fontSize: '18px' }}>
+                                        Duração: {calcularDuracao(perturbacao.horaInicio, perturbacao.horaFim)}
+                                    </div>
+                                )}
+
+                                <button
+                                    onClick={adicionarPerturbacao}
+                                    disabled={syncing}
+                                    style={{
+                                        width: '100%',
+                                        padding: '18px',
+                                        background: syncing ? '#94a3b8' : 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontSize: '18px',
+                                        fontWeight: '700'
+                                    }}
+                                >
+                                    {syncing ? '⏳ A guardar...' : '✓ Registar Perturbação'}
+                                </button>
+                            </div>
+
+                            {/* Lista de perturbações do dia */}
+                            {getPerturbacoesDoDia().length > 0 && (
+                                <div style={{ marginTop: '20px' }}>
+                                    <h3 style={{ color: '#dc2626', margin: '0 0 10px 0', fontSize: '16px' }}>Perturbações de hoje ({getPerturbacoesDoDia().length})</h3>
+                                    {getPerturbacoesDoDia().map((p, idx) => (
+                                        <div key={p.id} style={{ background: 'white', borderRadius: '10px', padding: '12px', marginBottom: '8px', borderLeft: '4px solid #dc2626' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div>
+                                                    <div style={{ fontWeight: '600', color: '#dc2626', fontSize: '14px' }}>{p.descricao}</div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{p.horaInicio} - {p.horaFim} ({p.duracao})</div>
+                                                </div>
+                                                <button onClick={() => removerPerturbacao(p.id)} style={{ background: '#fee2e2', border: 'none', color: '#dc2626', padding: '6px 10px', borderRadius: '6px', fontSize: '12px' }}>🗑️</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Vista de adicionar operação
+            if (view === 'operacao') {
+                return (
+                    <div style={{ minHeight: '100vh', background: '#f0f9ff' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                            <button onClick={() => setView('form')} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', marginBottom: '15px' }}>
+                                ← Voltar
+                            </button>
+                            <h1 style={{ margin: 0, fontSize: '24px' }}>📦 Registar Operação</h1>
+                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operadorNome}</p>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            <div style={{ background: 'white', borderRadius: '16px', padding: '20px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)', marginBottom: '15px' }}>
+                                
+                                {/* Data */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>📅 Data</label>
+                                    <input
+                                        type="date"
+                                        value={registo.data}
+                                        onChange={(e) => setRegisto({...registo, data: e.target.value})}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '16px' }}
+                                    />
+                                </div>
+
+                                {/* Tipologia/Programa */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>🏭 Programa</label>
+                                    <select
+                                        value={registo.tipologia}
+                                        onChange={(e) => setRegisto({...registo, tipologia: e.target.value, artigo: '', tipoCaixa: '', operacao: '', unidadeProducao: ''})}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '16px' }}
+                                    >
+                                        <option value="">Selecionar programa...</option>
+                                        {getProgramas().map((t, i) => (
+                                            <option key={i} value={t.id}>{t.icon} {t.nome}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Artigo */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>📦 Artigo</label>
+                                    <select
+                                        value={registo.artigo}
+                                        onChange={(e) => {
+                                            const art = todosArtigos.find(a => a.Artigo === e.target.value);
+                                            setRegisto({...registo, artigo: e.target.value, tipoCaixa: art?.Tipo || '', operacao: '', unidadeProducao: ''});
+                                        }}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '16px' }}
+                                        disabled={!registo.tipologia}
+                                    >
+                                        <option value="">{registo.tipologia ? 'Selecionar artigo...' : 'Selecione primeiro o programa...'}</option>
+                                        {getArtigosFiltrados().map((a, i) => (
+                                            <option key={i} value={a.Artigo}>{a.Artigo}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Operação */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>🔧 Operação</label>
+                                    <select
+                                        value={registo.operacao}
+                                        onChange={(e) => {
+                                            const op = todasOperacoes.find(o => o.Op === e.target.value);
+                                            setRegisto({...registo, operacao: e.target.value, unidadeProducao: op?.Unidade || ''});
+                                        }}
+                                        style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '16px' }}
+                                        disabled={!registo.artigo}
+                                    >
+                                        <option value="">{registo.artigo ? 'Selecionar operação...' : 'Selecione primeiro o artigo...'}</option>
+                                        {getOperacoesFiltradas().map((o, i) => (
+                                            <option key={i} value={o.Op}>{o.Op}</option>
+                                        ))}
+                                    </select>
+                                    {registo.unidadeProducao && (
+                                        <div style={{ marginTop: '8px', padding: '8px', background: '#f3e8ff', borderRadius: '8px', fontSize: '13px', color: '#7c3aed' }}>
+                                            📍 {registo.unidadeProducao}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Horas */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>⏱️ Horário</label>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#64748b' }}>Início</label>
+                                            <input
+                                                type="time"
+                                                value={registo.horaInicio}
+                                                onChange={(e) => setRegisto({...registo, horaInicio: e.target.value})}
+                                                style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '18px' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', marginBottom: '5px', fontSize: '12px', color: '#64748b' }}>Fim</label>
+                                            <input
+                                                type="time"
+                                                value={registo.horaFim}
+                                                onChange={(e) => setRegisto({...registo, horaFim: e.target.value})}
+                                                style={{ width: '100%', padding: '15px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '18px' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    {registo.horaInicio && registo.horaFim && (
+                                        <div style={{ marginTop: '10px', padding: '10px', background: '#ecfdf5', borderRadius: '8px', textAlign: 'center', fontWeight: '700', color: '#059669', fontSize: '16px' }}>
+                                            Duração: {calcularDuracao(registo.horaInicio, registo.horaFim)}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Comentários */}
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>💬 Comentários (opcional)</label>
+                                    <textarea
+                                        value={registo.comentarios}
+                                        onChange={(e) => setRegisto({...registo, comentarios: e.target.value})}
+                                        placeholder="Observações..."
+                                        rows={2}
+                                        style={{ width: '100%', padding: '12px', border: '2px solid #bfdbfe', borderRadius: '12px', fontSize: '14px', resize: 'none' }}
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={adicionarRegisto}
+                                    disabled={syncing}
+                                    style={{
+                                        width: '100%',
+                                        padding: '18px',
+                                        background: syncing ? '#94a3b8' : 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontSize: '18px',
+                                        fontWeight: '700'
+                                    }}
+                                >
+                                    {syncing ? '⏳ A guardar...' : '✓ Registar Operação'}
+                                </button>
+                            </div>
+
+                            {/* Lista de operações do dia */}
+                            {getRegistosDoDia().length > 0 && (
+                                <div>
+                                    <h3 style={{ color: '#0078d4', margin: '0 0 10px 0', fontSize: '16px' }}>Operações de hoje ({getRegistosDoDia().length})</h3>
+                                    {getRegistosDoDia().sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)).map((r, idx) => (
+                                        <div key={r.id} style={{ background: 'white', borderRadius: '10px', padding: '12px', marginBottom: '8px', borderLeft: '4px solid #0078d4' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                                                        <span style={{ fontSize: '12px', color: '#0078d4', fontWeight: '600' }}>{r.horaInicio}-{r.horaFim}</span>
+                                                        <span style={{ fontSize: '11px', color: '#64748b' }}>({r.duracao})</span>
+                                                    </div>
+                                                    <div style={{ fontWeight: '600', color: '#334155', fontSize: '14px' }}>{r.artigo}</div>
+                                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{r.operacao}</div>
+                                                </div>
+                                                <button onClick={() => eliminarRegisto(r.id)} style={{ background: '#fee2e2', border: 'none', color: '#dc2626', padding: '6px 10px', borderRadius: '6px', fontSize: '12px' }}>🗑️</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Vista de registos
+            if (view === 'registos') {
+                const pendentes = registos.filter(r => !r.synced).length;
+                const sincronizados = registos.filter(r => r.synced).length;
+
+                return (
+                    <div style={{ minHeight: '100vh', background: '#f0f4f8' }}>
+                        <div style={{ background: 'linear-gradient(135deg, #059669 0%, #047857 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                            <button onClick={() => setView('form')} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', marginBottom: '15px' }}>
+                                ← Voltar
+                            </button>
+                            <h1 style={{ margin: 0, fontSize: '24px' }}>📋 Registos ({registos.length})</h1>
+                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>
+                                ✅ {sincronizados} sincronizados | ⏳ {pendentes} pendentes
+                            </p>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                            {pendentes > 0 && (
+                                <button
+                                    onClick={sincronizarPendentes}
+                                    disabled={syncing}
+                                    style={{
+                                        width: '100%',
+                                        padding: '15px',
+                                        background: syncing ? '#94a3b8' : 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '12px',
+                                        fontSize: '16px',
+                                        fontWeight: '700',
+                                        marginBottom: '15px'
+                                    }}
+                                >
+                                    {syncing ? <span className="spinner">🔄</span> : '☁️'} Sincronizar {pendentes} pendentes
+                                </button>
+                            )}
+
+                            {registos.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                                    <div style={{ fontSize: '60px', marginBottom: '15px' }}>📭</div>
+                                    <p>Ainda não há registos</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {registos.map((r, idx) => (
+                                        <div key={r.id} style={{ background: 'white', borderRadius: '12px', padding: '15px', marginBottom: '12px', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderLeft: `4px solid ${r.synced ? '#059669' : '#f59e0b'}` }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                                                        <span style={{ fontSize: '12px' }}>{r.synced ? '✅' : '⏳'}</span>
+                                                        <span style={{ fontWeight: '700', color: '#0078d4' }}>{r.artigo}</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '3px' }}>{r.operacao}</div>
+                                                    <div style={{ fontSize: '14px', color: '#334155' }}>
+                                                        <span>⏱️ {r.duracao}</span>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => eliminarRegisto(r.id)}
+                                                    style={{ background: '#fee2e2', border: 'none', color: '#dc2626', padding: '8px 12px', borderRadius: '8px', fontSize: '14px' }}
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div style={{ display: 'grid', gap: '10px', marginTop: '15px' }}>
+                                        <button
+                                            onClick={exportarExcelLocal}
+                                            style={{
+                                                padding: '15px',
+                                                background: 'white',
+                                                color: '#059669',
+                                                border: '2px solid #059669',
+                                                borderRadius: '12px',
+                                                fontSize: '14px',
+                                                fontWeight: '600'
+                                            }}
+                                        >
+                                            📥 Exportar Excel (Backup)
+                                        </button>
+
+                                        {sincronizados > 0 && (
+                                            <button
+                                                onClick={limparSincronizados}
+                                                style={{
+                                                    padding: '15px',
+                                                    background: 'white',
+                                                    color: '#64748b',
+                                                    border: '2px solid #e2e8f0',
+                                                    borderRadius: '12px',
+                                                    fontSize: '14px'
+                                                }}
+                                            >
+                                                🧹 Limpar {sincronizados} sincronizados
+                                            </button>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            // Menu principal
+            return (
+                <div style={{ minHeight: '100vh', background: '#f0f4f8' }}>
+                    {/* Header */}
+                    <div style={{ background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div>
+                                <h1 style={{ margin: 0, fontSize: '24px' }}>🏭 Registo Produção</h1>
+                                <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operadorNome}</p>
+                            </div>
+                            <button 
+                                onClick={() => setShowResumo(true)}
+                                style={{ 
+                                    background: 'rgba(255,255,255,0.2)', 
+                                    border: 'none', 
+                                    color: 'white', 
+                                    padding: '10px 12px', 
+                                    borderRadius: '10px',
+                                    fontSize: '16px'
+                                }}
+                                title="Resumo do dia"
+                            >
+                                📊
+                            </button>
+                        </div>
+                        
+                        {/* Data de hoje */}
+                        <div style={{ 
+                            marginTop: '15px', 
+                            padding: '10px 15px', 
+                            background: 'rgba(255,255,255,0.15)', 
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px'
+                        }}>
+                            <span>📅</span>
+                            <input
+                                type="date"
+                                value={registo.data}
+                                onChange={(e) => {
+                                    setRegisto({...registo, data: e.target.value});
+                                    setPerturbacao({...perturbacao, data: e.target.value});
+                                }}
+                                style={{ 
+                                    background: 'transparent', 
+                                    border: 'none', 
+                                    color: 'white', 
+                                    fontSize: '16px',
+                                    fontWeight: '600'
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Menu de opções */}
+                    <div style={{ padding: '20px' }}>
+                        
+                        {/* Totais do dia */}
+                        {(getRegistosDoDia().length > 0 || getPerturbacoesDoDia().length > 0) && (
+                            <div style={{ marginBottom: '20px' }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                                    <div style={{ background: 'white', borderRadius: '12px', padding: '12px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#0078d4' }}>{getRegistosDoDia().length}</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>Operações</div>
+                                    </div>
+                                    <div style={{ background: 'white', borderRadius: '12px', padding: '12px', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+                                        <div style={{ fontSize: '24px', fontWeight: '700', color: '#dc2626' }}>{getPerturbacoesDoDia().length}</div>
+                                        <div style={{ fontSize: '11px', color: '#64748b' }}>Perturbações</div>
+                                    </div>
+                                </div>
+                                
+                                {/* Aviso 8 horas */}
+                                {(() => {
+                                    const totais = calcularTotaisDia();
+                                    const diff = totais.diferencaMinutos;
+                                    const diffAbs = Math.abs(diff);
+                                    const diffHoras = Math.floor(diffAbs / 60);
+                                    const diffMins = diffAbs % 60;
+                                    const diffTexto = diffHoras > 0 ? `${diffHoras}h ${diffMins}min` : `${diffMins}min`;
+                                    
+                                    if (totais.totalMinutosDia === 0) return null;
+                                    
+                                    if (diff < -30) {
+                                        // Faltam mais de 30 minutos para as 8h
+                                        return (
+                                            <div style={{ 
+                                                background: '#fef3c7', 
+                                                border: '2px solid #f59e0b',
+                                                borderRadius: '12px', 
+                                                padding: '12px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px'
+                                            }}>
+                                                <span style={{ fontSize: '24px' }}>⏰</span>
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px' }}>Faltam {diffTexto}</div>
+                                                    <div style={{ fontSize: '12px', color: '#a16207' }}>Total: {totais.totalTempoDia} / 8h</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    } else if (diff > 30) {
+                                        // Mais de 30 minutos acima das 8h
+                                        return (
+                                            <div style={{ 
+                                                background: '#fee2e2', 
+                                                border: '2px solid #dc2626',
+                                                borderRadius: '12px', 
+                                                padding: '12px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px'
+                                            }}>
+                                                <span style={{ fontSize: '24px' }}>⚠️</span>
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#dc2626', fontSize: '14px' }}>+{diffTexto} extra</div>
+                                                    <div style={{ fontSize: '12px', color: '#b91c1c' }}>Total: {totais.totalTempoDia} / 8h</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    } else {
+                                        // Dentro da margem de 30 minutos
+                                        return (
+                                            <div style={{ 
+                                                background: '#dcfce7', 
+                                                border: '2px solid #059669',
+                                                borderRadius: '12px', 
+                                                padding: '12px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '10px'
+                                            }}>
+                                                <span style={{ fontSize: '24px' }}>✅</span>
+                                                <div>
+                                                    <div style={{ fontWeight: '700', color: '#059669', fontSize: '14px' }}>Dia completo!</div>
+                                                    <div style={{ fontSize: '12px', color: '#047857' }}>Total: {totais.totalTempoDia}</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                })()}
+                            </div>
+                        )}
+
+                        {/* Botão Operações */}
+                        <button
+                            onClick={() => setView('operacao')}
+                            style={{
+                                width: '100%',
+                                padding: '25px 20px',
+                                background: 'linear-gradient(135deg, #0078d4 0%, #005a9e 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '16px',
+                                fontSize: '18px',
+                                fontWeight: '700',
+                                marginBottom: '15px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 4px 15px rgba(0,120,212,0.3)'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <span style={{ fontSize: '30px' }}>📦</span>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div>Registar Operação</div>
+                                    <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Artigo, quantidade, tempo</div>
+                                </div>
+                            </div>
+                            <span style={{ fontSize: '24px' }}>→</span>
+                        </button>
+
+                        {/* Botão Perturbações */}
+                        <button
+                            onClick={() => {
+                                setPerturbacao({...perturbacao, data: registo.data});
+                                setView('perturbacao');
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '25px 20px',
+                                background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '16px',
+                                fontSize: '18px',
+                                fontWeight: '700',
+                                marginBottom: '15px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                boxShadow: '0 4px 15px rgba(220,38,38,0.3)'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <span style={{ fontSize: '30px' }}>⚠️</span>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div>Registar Perturbação</div>
+                                    <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Paragens, avarias, etc.</div>
+                                </div>
+                            </div>
+                            <span style={{ fontSize: '24px' }}>→</span>
+                        </button>
+
+                        {/* Terminar Dia */}
+                        <button
+                            onClick={() => {
+                                const registosDoDia = getRegistosDoDia();
+                                const perturbacoesDoDia = getPerturbacoesDoDia();
+                                const total = registosDoDia.length + perturbacoesDoDia.length;
+                                const totais = calcularTotaisDia();
+                                const diff = totais.diferencaMinutos;
+                                const diffAbs = Math.abs(diff);
+                                const diffHoras = Math.floor(diffAbs / 60);
+                                const diffMins = diffAbs % 60;
+                                const diffTexto = diffHoras > 0 ? `${diffHoras}h ${diffMins}min` : `${diffMins}min`;
+                                
+                                let tempoMsg = '';
+                                if (totais.totalMinutosDia > 0) {
+                                    if (diff < -10) {
+                                        tempoMsg = `\n\n⚠️ Faltam ${diffTexto} para as 8h`;
+                                    } else if (diff > 10) {
+                                        tempoMsg = `\n\n⚠️ Excede ${diffTexto} das 8h`;
+                                    } else {
+                                        tempoMsg = `\n\n✅ Tempo completo: ${totais.totalTempoDia}`;
+                                    }
+                                }
+                                
+                                if (total === 0) {
+                                    if (confirm('Não tem registos hoje. Terminar mesmo assim?')) {
+                                        terminarDia();
+                                    }
+                                } else {
+                                    if (confirm(`Terminar o dia com ${registosDoDia.length} operação(ões) e ${perturbacoesDoDia.length} perturbação(ões)?${tempoMsg}`)) {
+                                        terminarDia();
+                                    }
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '18px',
+                                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '12px',
+                                fontSize: '18px',
+                                fontWeight: '700',
+                                marginBottom: '15px',
+                                boxShadow: '0 4px 15px rgba(5,150,105,0.3)'
+                            }}
+                        >
+                            ✅ Terminar Dia
+                        </button>
+
+                        {/* Alterar operador */}
+                        <button
+                            onClick={() => {
+                                if (confirm('Alterar colaborador?')) {
+                                    setConfigured(false);
+                                }
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '12px',
+                                background: 'transparent',
+                                color: '#64748b',
+                                border: 'none',
+                                fontSize: '14px'
+                            }}
+                        >
+                            ⚙️ Alterar colaborador
+                        </button>
+</div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

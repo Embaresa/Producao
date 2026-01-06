@@ -812,6 +812,52 @@
                     return;
                 }
 
+                // Validar se é feriado
+                const feriado = eFeriado(registo.data);
+                if (feriado) {
+                    if (!confirm(`⚠️ ${registo.data.split('-').reverse().join('/')} é ${feriado.nome}!\n\nTem a certeza que quer registar trabalho neste dia?`)) {
+                        return;
+                    }
+                }
+
+                // Validar se colaborador está de férias/ausente
+                const ausencia = temAusencia(operadorNome, registo.data);
+                if (ausencia) {
+                    const tipoTexto = ausencia.tipo === 'ferias' ? 'de férias' : 
+                                      ausencia.tipo === 'baixa' ? 'de baixa médica' : 
+                                      ausencia.tipo === 'falta_just' ? 'com falta justificada' : 'ausente';
+                    if (!confirm(`⚠️ Está registado como ${tipoTexto} neste dia!\n\nTem a certeza que quer registar trabalho?`)) {
+                        return;
+                    }
+                }
+
+                // Validar se está a registar durante hora de refeição
+                const horarioColab = horariosColaboradores[operadorNome];
+                if (horarioColab && horarioColab.turno) {
+                    const turnoEfetivo = getTurnoEfetivo(operadorNome, registo.data);
+                    const turnoInfo = TURNOS[turnoEfetivo];
+                    if (turnoInfo && turnoInfo.refeicaoInicio && turnoInfo.refeicaoFim) {
+                        const [refInicioH, refInicioM] = turnoInfo.refeicaoInicio.split(':').map(Number);
+                        const [refFimH, refFimM] = turnoInfo.refeicaoFim.split(':').map(Number);
+                        const [regInicioH, regInicioM] = registo.horaInicio.split(':').map(Number);
+                        const [regFimH, regFimM] = registo.horaFim.split(':').map(Number);
+                        
+                        const refInicioMin = refInicioH * 60 + refInicioM;
+                        const refFimMin = refFimH * 60 + refFimM;
+                        const regInicioMin = regInicioH * 60 + regInicioM;
+                        const regFimMin = regFimH * 60 + regFimM;
+                        
+                        // Verificar se há sobreposição com hora de refeição
+                        const sobrepoe = (regInicioMin < refFimMin && regFimMin > refInicioMin);
+                        
+                        if (sobrepoe) {
+                            if (!confirm(`⚠️ Está a registar trabalho durante a hora de refeição!\n\nO seu período de refeição é: ${turnoInfo.refeicaoInicio} - ${turnoInfo.refeicaoFim}\n\nTem a certeza que quer continuar?`)) {
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // Validar sobreposição de horas
                 const validacao = validarHoras(registo.horaInicio, registo.horaFim);
                 if (!validacao.valido) {
@@ -947,6 +993,52 @@
                 if (!perturbacao.descricao || !perturbacao.horaInicio || !perturbacao.horaFim) {
                     alert('Preencha todos os campos da perturbação!');
                     return;
+                }
+
+                // Validar se é feriado
+                const feriado = eFeriado(perturbacao.data);
+                if (feriado) {
+                    if (!confirm(`⚠️ ${perturbacao.data.split('-').reverse().join('/')} é ${feriado.nome}!\n\nTem a certeza que quer registar perturbação neste dia?`)) {
+                        return;
+                    }
+                }
+
+                // Validar se colaborador está de férias/ausente
+                const ausencia = temAusencia(operadorNome, perturbacao.data);
+                if (ausencia) {
+                    const tipoTexto = ausencia.tipo === 'ferias' ? 'de férias' : 
+                                      ausencia.tipo === 'baixa' ? 'de baixa médica' : 
+                                      ausencia.tipo === 'falta_just' ? 'com falta justificada' : 'ausente';
+                    if (!confirm(`⚠️ Está registado como ${tipoTexto} neste dia!\n\nTem a certeza que quer registar perturbação?`)) {
+                        return;
+                    }
+                }
+
+                // Validar se está a registar durante hora de refeição
+                const horarioColab = horariosColaboradores[operadorNome];
+                if (horarioColab && horarioColab.turno) {
+                    const turnoEfetivo = getTurnoEfetivo(operadorNome, perturbacao.data);
+                    const turnoInfo = TURNOS[turnoEfetivo];
+                    if (turnoInfo && turnoInfo.refeicaoInicio && turnoInfo.refeicaoFim) {
+                        const [refInicioH, refInicioM] = turnoInfo.refeicaoInicio.split(':').map(Number);
+                        const [refFimH, refFimM] = turnoInfo.refeicaoFim.split(':').map(Number);
+                        const [regInicioH, regInicioM] = perturbacao.horaInicio.split(':').map(Number);
+                        const [regFimH, regFimM] = perturbacao.horaFim.split(':').map(Number);
+                        
+                        const refInicioMin = refInicioH * 60 + refInicioM;
+                        const refFimMin = refFimH * 60 + refFimM;
+                        const regInicioMin = regInicioH * 60 + regInicioM;
+                        const regFimMin = regFimH * 60 + regFimM;
+                        
+                        // Verificar se há sobreposição com hora de refeição
+                        const sobrepoe = (regInicioMin < refFimMin && regFimMin > refInicioMin);
+                        
+                        if (sobrepoe) {
+                            if (!confirm(`⚠️ Está a registar perturbação durante a hora de refeição!\n\nO seu período de refeição é: ${turnoInfo.refeicaoInicio} - ${turnoInfo.refeicaoFim}\n\nTem a certeza que quer continuar?`)) {
+                                return;
+                            }
+                        }
+                    }
                 }
 
                 setSyncing(true);

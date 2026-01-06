@@ -244,6 +244,113 @@
                 return {};
             });
 
+            // Feriados portugueses (fixos)
+            const feriadosFixos = [
+                { dia: '01-01', nome: 'Ano Novo' },
+                { dia: '04-25', nome: 'Dia da Liberdade' },
+                { dia: '05-01', nome: 'Dia do Trabalhador' },
+                { dia: '06-10', nome: 'Dia de Portugal' },
+                { dia: '08-15', nome: 'Assunção de Nossa Senhora' },
+                { dia: '10-05', nome: 'Implantação da República' },
+                { dia: '11-01', nome: 'Todos os Santos' },
+                { dia: '12-01', nome: 'Restauração da Independência' },
+                { dia: '12-08', nome: 'Imaculada Conceição' },
+                { dia: '12-25', nome: 'Natal' }
+            ];
+
+            // Calcular Páscoa (algoritmo de Meeus/Jones/Butcher)
+            const calcularPascoa = (ano) => {
+                const a = ano % 19;
+                const b = Math.floor(ano / 100);
+                const c = ano % 100;
+                const d = Math.floor(b / 4);
+                const e = b % 4;
+                const f = Math.floor((b + 8) / 25);
+                const g = Math.floor((b - f + 1) / 3);
+                const h = (19 * a + b - d - g + 15) % 30;
+                const i = Math.floor(c / 4);
+                const k = c % 4;
+                const l = (32 + 2 * e + 2 * i - h - k) % 7;
+                const m = Math.floor((a + 11 * h + 22 * l) / 451);
+                const mes = Math.floor((h + l - 7 * m + 114) / 31);
+                const dia = ((h + l - 7 * m + 114) % 31) + 1;
+                return new Date(ano, mes - 1, dia);
+            };
+
+            // Obter feriados móveis para um ano
+            const getFeriadosMoveis = (ano) => {
+                const pascoa = calcularPascoa(ano);
+                const sextaFeiraSanta = new Date(pascoa);
+                sextaFeiraSanta.setDate(pascoa.getDate() - 2);
+                const corpoCristo = new Date(pascoa);
+                corpoCristo.setDate(pascoa.getDate() + 60);
+                
+                return [
+                    { data: sextaFeiraSanta.toISOString().split('T')[0], nome: 'Sexta-Feira Santa' },
+                    { data: pascoa.toISOString().split('T')[0], nome: 'Páscoa' },
+                    { data: corpoCristo.toISOString().split('T')[0], nome: 'Corpo de Deus' }
+                ];
+            };
+
+            // Estado dos feriados personalizados (adicionados pelo utilizador)
+            const [feriadosPersonalizados, setFeriadosPersonalizados] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('feriadosPersonalizados');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar feriados:', e);
+                }
+                return [];
+            });
+
+            // Adicionar feriado personalizado
+            const adicionarFeriado = (data, nome) => {
+                const novosFeriados = [...feriadosPersonalizados, { data, nome }];
+                setFeriadosPersonalizados(novosFeriados);
+                localStorage.setItem('feriadosPersonalizados', JSON.stringify(novosFeriados));
+            };
+
+            // Remover feriado personalizado
+            const removerFeriado = (data) => {
+                const novosFeriados = feriadosPersonalizados.filter(f => f.data !== data);
+                setFeriadosPersonalizados(novosFeriados);
+                localStorage.setItem('feriadosPersonalizados', JSON.stringify(novosFeriados));
+            };
+
+            // Verificar se uma data é feriado
+            const eFeriado = (data) => {
+                const ano = new Date(data).getFullYear();
+                const mesdia = data.slice(5); // MM-DD
+                
+                // Verificar feriados fixos
+                const feriadoFixo = feriadosFixos.find(f => f.dia === mesdia);
+                if (feriadoFixo) return feriadoFixo;
+                
+                // Verificar feriados móveis
+                const feriadosMoveis = getFeriadosMoveis(ano);
+                const feriadoMovel = feriadosMoveis.find(f => f.data === data);
+                if (feriadoMovel) return feriadoMovel;
+                
+                // Verificar feriados personalizados
+                const feriadoPersonalizado = feriadosPersonalizados.find(f => f.data === data);
+                if (feriadoPersonalizado) return feriadoPersonalizado;
+                
+                return null;
+            };
+
+            // Adicionar férias a múltiplos colaboradores
+            const adicionarFeriasEmMassa = (colaboradores, dataInicio, dataFim, observacoes = '') => {
+                let novasAusencias = { ...ausencias };
+                colaboradores.forEach(nome => {
+                    const id = `${nome}_${dataInicio}_${Date.now()}_${Math.random()}`;
+                    novasAusencias[id] = { nome, dataInicio, dataFim, tipo: 'ferias', observacoes };
+                });
+                setAusencias(novasAusencias);
+                localStorage.setItem('ausencias', JSON.stringify(novasAusencias));
+            };
+
             // Data selecionada no calendário
             const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
             const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
@@ -1180,6 +1287,10 @@
 
             // Obter estado do colaborador numa data
             const getEstadoColaborador = (nome, data) => {
+                // Verificar se é feriado
+                const feriado = eFeriado(data);
+                if (feriado) return { estado: 'feriado', nome: feriado.nome, cor: '#ec4899' };
+
                 // Verificar ausência
                 const ausencia = temAusencia(nome, data);
                 if (ausencia) return { estado: 'ausencia', tipo: ausencia.tipo, cor: ausencia.tipo === 'ferias' ? '#3b82f6' : ausencia.tipo === 'baixa' ? '#8b5cf6' : ausencia.tipo === 'falta_just' ? '#f59e0b' : '#ef4444' };
@@ -1973,6 +2084,10 @@
                                                 <span style={{ color: '#aaa', fontSize: '11px' }}>Férias</span>
                                             </div>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ec4899' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Feriado</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                                                 <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#e5e7eb' }}></div>
                                                 <span style={{ color: '#aaa', fontSize: '11px' }}>Folga</span>
                                             </div>
@@ -2141,9 +2256,98 @@
                             {/* Tab Ausências */}
                             {adminTab === 'ausencias' && (
                                 <div>
-                                    {/* Adicionar Ausência */}
+                                    {/* Férias em Massa */}
+                                    <div style={{ background: '#1e3a5f', borderRadius: '12px', padding: '20px', marginBottom: '20px', border: '1px solid #3b82f6' }}>
+                                        <h3 style={{ color: '#93c5fd', margin: '0 0 15px 0', fontSize: '16px' }}>🏖️ Marcar Férias (Vários Colaboradores)</h3>
+                                        <p style={{ color: '#64748b', fontSize: '12px', marginBottom: '15px' }}>
+                                            Selecione vários colaboradores para marcar férias no mesmo período.
+                                        </p>
+                                        <div style={{ display: 'grid', gap: '10px' }}>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', background: '#0f172a', padding: '15px', borderRadius: '8px', maxHeight: '150px', overflowY: 'auto' }}>
+                                                {todosColaboradores.map((nome, i) => (
+                                                    <label key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'white', fontSize: '12px', cursor: 'pointer' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            className="feriasMassaCheck"
+                                                            value={nome}
+                                                            style={{ cursor: 'pointer' }}
+                                                        />
+                                                        {nome.split(' ')[0]}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    const checks = document.querySelectorAll('.feriasMassaCheck');
+                                                    const todos = Array.from(checks).every(c => c.checked);
+                                                    checks.forEach(c => c.checked = !todos);
+                                                }}
+                                                style={{ padding: '8px', background: '#334155', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px' }}
+                                            >
+                                                {'{'}Selecionar / Desselecionar Todos{'}'}
+                                            </button>
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <label style={{ color: '#93c5fd', fontSize: '11px', display: 'block', marginBottom: '5px' }}>Data Início:</label>
+                                                    <input
+                                                        type="date"
+                                                        id="feriasMassaInicio"
+                                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: '#0f172a', color: 'white', fontSize: '14px' }}
+                                                    />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <label style={{ color: '#93c5fd', fontSize: '11px', display: 'block', marginBottom: '5px' }}>Data Fim:</label>
+                                                    <input
+                                                        type="date"
+                                                        id="feriasMassaFim"
+                                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: '#0f172a', color: 'white', fontSize: '14px' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                id="feriasMassaObs"
+                                                placeholder="Observações (ex: Férias de Natal)..."
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#0f172a', color: 'white', fontSize: '14px' }}
+                                            />
+                                            <button 
+                                                onClick={() => {
+                                                    const checks = document.querySelectorAll('.feriasMassaCheck:checked');
+                                                    const colaboradores = Array.from(checks).map(c => c.value);
+                                                    const inicio = document.getElementById('feriasMassaInicio').value;
+                                                    const fim = document.getElementById('feriasMassaFim').value;
+                                                    const obs = document.getElementById('feriasMassaObs').value;
+                                                    
+                                                    if (colaboradores.length === 0) {
+                                                        alert('Selecione pelo menos um colaborador!');
+                                                        return;
+                                                    }
+                                                    if (!inicio || !fim) {
+                                                        alert('Preencha as datas!');
+                                                        return;
+                                                    }
+                                                    if (fim < inicio) {
+                                                        alert('Data fim deve ser igual ou posterior à data início!');
+                                                        return;
+                                                    }
+                                                    
+                                                    adicionarFeriasEmMassa(colaboradores, inicio, fim, obs);
+                                                    alert(`✅ Férias marcadas para ${colaboradores.length} colaborador(es)!`);
+                                                    
+                                                    // Limpar seleção
+                                                    document.querySelectorAll('.feriasMassaCheck').forEach(c => c.checked = false);
+                                                    document.getElementById('feriasMassaObs').value = '';
+                                                }}
+                                                style={{ padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}
+                                            >
+                                                🏖️ Marcar Férias para Selecionados
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Adicionar Ausência Individual */}
                                     <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
-                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>🏖️ Registar Ausência</h3>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Registar Ausência Individual</h3>
                                         <div style={{ display: 'grid', gap: '10px' }}>
                                             <select
                                                 id="ausenciaColaborador"
@@ -2214,6 +2418,79 @@
                                         </div>
                                     </div>
 
+                                    {/* Feriados */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>🎉 Feriados {new Date().getFullYear()}</h3>
+                                        
+                                        {/* Feriados Fixos */}
+                                        <div style={{ marginBottom: '15px' }}>
+                                            <h4 style={{ color: '#ec4899', fontSize: '13px', margin: '0 0 10px 0' }}>Feriados Nacionais (automáticos)</h4>
+                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                                {feriadosFixos.map((f, i) => (
+                                                    <div key={i} style={{ background: '#3d3d3d', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', color: '#aaa' }}>
+                                                        <span style={{ color: '#ec4899' }}>{f.dia.split('-').reverse().join('/')}</span> {f.nome}
+                                                    </div>
+                                                ))}
+                                                {getFeriadosMoveis(new Date().getFullYear()).map((f, i) => (
+                                                    <div key={`movel-${i}`} style={{ background: '#3d3d3d', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', color: '#aaa' }}>
+                                                        <span style={{ color: '#ec4899' }}>{f.data.split('-').reverse().join('/')}</span> {f.nome}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Adicionar Feriado Personalizado */}
+                                        <div style={{ background: '#3d3d3d', borderRadius: '8px', padding: '15px', marginBottom: '15px' }}>
+                                            <h4 style={{ color: '#f59e0b', fontSize: '13px', margin: '0 0 10px 0' }}>➕ Adicionar Feriado/Ponte</h4>
+                                            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                                                <input
+                                                    type="date"
+                                                    id="novoFeriadoData"
+                                                    style={{ flex: '1', minWidth: '140px', padding: '8px', borderRadius: '6px', border: 'none', background: '#2d2d2d', color: 'white', fontSize: '14px' }}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    id="novoFeriadoNome"
+                                                    placeholder="Nome (ex: Ponte)"
+                                                    style={{ flex: '2', minWidth: '150px', padding: '8px', borderRadius: '6px', border: 'none', background: '#2d2d2d', color: 'white', fontSize: '14px' }}
+                                                />
+                                                <button 
+                                                    onClick={() => {
+                                                        const data = document.getElementById('novoFeriadoData').value;
+                                                        const nome = document.getElementById('novoFeriadoNome').value;
+                                                        if (!data || !nome) {
+                                                            alert('Preencha a data e o nome!');
+                                                            return;
+                                                        }
+                                                        adicionarFeriado(data, nome);
+                                                        alert('✅ Feriado adicionado!');
+                                                        document.getElementById('novoFeriadoNome').value = '';
+                                                    }}
+                                                    style={{ padding: '8px 16px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '13px' }}
+                                                >
+                                                    Adicionar
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Lista de Feriados Personalizados */}
+                                        {feriadosPersonalizados.length > 0 && (
+                                            <div>
+                                                <h4 style={{ color: '#f59e0b', fontSize: '13px', margin: '0 0 10px 0' }}>📋 Feriados/Pontes Adicionados</h4>
+                                                {feriadosPersonalizados.sort((a, b) => a.data.localeCompare(b.data)).map((f, i) => (
+                                                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#3d3d3d', borderRadius: '6px', marginBottom: '6px' }}>
+                                                        <div style={{ color: 'white', fontSize: '13px' }}>
+                                                            <span style={{ color: '#f59e0b' }}>{f.data.split('-').reverse().join('/')}</span> - {f.nome}
+                                                        </div>
+                                                        <button onClick={() => removerFeriado(f.data)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '4px 10px', borderRadius: '4px', fontSize: '11px' }}>
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Lista de Ausências */}
                                     <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
                                         <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Ausências Registadas</h3>
@@ -2238,8 +2515,8 @@
                                                                 <div style={{ color: tipoInfo.cor, fontSize: '12px', marginTop: '3px' }}>{tipoInfo.emoji} {tipoInfo.label}</div>
                                                                 <div style={{ color: '#aaa', fontSize: '11px', marginTop: '3px' }}>
                                                                     {ausencia.dataInicio === ausencia.dataFim 
-                                                                        ? ausencia.dataInicio 
-                                                                        : `${ausencia.dataInicio} → ${ausencia.dataFim}`
+                                                                        ? ausencia.dataInicio.split('-').reverse().join('/')
+                                                                        : `${ausencia.dataInicio.split('-').reverse().join('/')} → ${ausencia.dataFim.split('-').reverse().join('/')}`
                                                                     }
                                                                 </div>
                                                                 {ausencia.observacoes && (

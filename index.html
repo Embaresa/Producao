@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -33,7 +34,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         // URLs do Power Automate configurados
         const POWER_AUTOMATE_PRODUCAO = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7d6d064896034900976cdbe6fecbd809/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o25Z-eFD68rkovgpItkF2MLL1wKINpkqRFsIZXBYWv8';
@@ -47,6 +48,7 @@
             const [syncing, setSyncing] = useState(false);
             const [syncStatus, setSyncStatus] = useState({ online: true, pendentes: 0 });
             const [configUrl, setConfigUrl] = useState(false);
+            const isInitialMount = useRef(true);
 
             useEffect(() => {
                 const saved = localStorage.getItem('registosPendentes');
@@ -185,19 +187,28 @@
                 return [];
             });
 
-            // Guardar dados personalizados quando mudam
+            // Guardar dados personalizados quando mudam (ignorar primeira renderização)
             useEffect(() => {
+                if (isInitialMount.current) return;
                 localStorage.setItem('customArtigos', JSON.stringify(customArtigos));
             }, [customArtigos]);
             useEffect(() => {
+                if (isInitialMount.current) return;
                 localStorage.setItem('customOperacoes', JSON.stringify(customOperacoes));
             }, [customOperacoes]);
             useEffect(() => {
+                if (isInitialMount.current) return;
                 localStorage.setItem('customPerturbacoes', JSON.stringify(customPerturbacoes));
             }, [customPerturbacoes]);
             useEffect(() => {
+                if (isInitialMount.current) return;
                 localStorage.setItem('customColaboradores', JSON.stringify(customColaboradores));
             }, [customColaboradores]);
+            
+            // Marcar como montado após primeira renderização
+            useEffect(() => {
+                isInitialMount.current = false;
+            }, []);
 
             const saveOperador = () => {
                 if (!operadorNome) {

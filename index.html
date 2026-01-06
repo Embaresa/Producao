@@ -1,4 +1,5 @@
 
+
 <!DOCTYPE html>
 <html lang="pt">
 <head>
@@ -81,6 +82,7 @@
                 "Amílcar Manuel Monginho Barreto",
                 "André Avelino Tavares Rocha",
                 "David Alexandre Lopes Rocha",
+                "Fernando Garcia",
                 "Hugo José Ferreira da Silva",
                 "Joaquim Comenda",
                 "Nuno Rafael Pereira Franco",
@@ -118,11 +120,133 @@
             const [showAdmin, setShowAdmin] = useState(false);
             const [adminPassword, setAdminPassword] = useState('');
             const [adminAuthed, setAdminAuthed] = useState(false);
-            const [adminTab, setAdminTab] = useState('importar'); // 'importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores'
+            const [adminTab, setAdminTab] = useState('importar'); // 'importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores', 'horarios', 'calendario', 'ausencias'
             const [novoItem, setNovoItem] = useState({ artigo: '', tipo: '', operacao: '', unidade: '', perturbacao: '', colaborador: '' });
             const [showResumo, setShowResumo] = useState(false);
             const [modoRapido, setModoRapido] = useState(false);
             const [resumoFinalDia, setResumoFinalDia] = useState(null);
+
+            // Definição dos turnos
+            const TURNOS = {
+                'turno1': { nome: 'Turno 1', entrada: '07:00', saida: '15:00', refeicaoInicio: '12:00', refeicaoFim: '12:30', horasTrabalho: 7.5 },
+                'turno2': { nome: 'Turno 2', entrada: '14:00', saida: '22:00', refeicaoInicio: '19:00', refeicaoFim: '19:30', horasTrabalho: 7.5 },
+                'normal': { nome: 'Normal', entrada: '08:00', saida: '17:30', refeicaoInicio: '13:00', refeicaoFim: '14:30', horasTrabalho: 8 },
+                'rotativo': { nome: 'Rotativo (T1↔T2)', entrada: '', saida: '', refeicaoInicio: '', refeicaoFim: '', horasTrabalho: 7.5 },
+                'extra': { nome: 'Extra', entrada: '', saida: '', refeicaoInicio: '', refeicaoFim: '', horasTrabalho: 0 }
+            };
+
+            // Obter número da semana do ano
+            const getNumeroSemana = (data) => {
+                const d = new Date(data);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+                const yearStart = new Date(d.getFullYear(), 0, 1);
+                return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+            };
+
+            // Obter turno efetivo para um colaborador numa data (considerando rotação)
+            const getTurnoEfetivo = (nome, data) => {
+                const horario = horariosColaboradores[nome];
+                if (!horario) return null;
+                
+                // Verificar se há exceção manual para esta semana
+                const semana = getNumeroSemana(data);
+                const ano = new Date(data).getFullYear();
+                const chaveExcecao = `${nome}_${ano}_${semana}`;
+                
+                if (excecoesTurno[chaveExcecao]) {
+                    return excecoesTurno[chaveExcecao];
+                }
+                
+                // Se não é rotativo, retorna o turno fixo
+                if (horario.turno !== 'rotativo') {
+                    return horario.turno;
+                }
+                
+                // Calcular turno baseado na rotação semanal
+                const semanaInicio = horario.semanaInicioTurno1 || 1;
+                const diferenca = semana - semanaInicio;
+                
+                // Se diferença é par, está no mesmo turno que começou
+                if (diferenca % 2 === 0) {
+                    return 'turno1';
+                } else {
+                    return 'turno2';
+                }
+            };
+
+            // Estado das exceções de turno (alterações manuais)
+            const [excecoesTurno, setExcecoesTurno] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('excecoesTurno');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar exceções de turno:', e);
+                }
+                return {};
+            });
+
+            // Adicionar/alterar exceção de turno
+            const definirExcecaoTurno = (nome, ano, semana, turno) => {
+                const chave = `${nome}_${ano}_${semana}`;
+                const novasExcecoes = { ...excecoesTurno, [chave]: turno };
+                setExcecoesTurno(novasExcecoes);
+                localStorage.setItem('excecoesTurno', JSON.stringify(novasExcecoes));
+            };
+
+            // Remover exceção de turno
+            const removerExcecaoTurno = (nome, ano, semana) => {
+                const chave = `${nome}_${ano}_${semana}`;
+                const novasExcecoes = { ...excecoesTurno };
+                delete novasExcecoes[chave];
+                setExcecoesTurno(novasExcecoes);
+                localStorage.setItem('excecoesTurno', JSON.stringify(novasExcecoes));
+            };
+
+            // Estado dos horários dos colaboradores
+            const [horariosColaboradores, setHorariosColaboradores] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('horariosColaboradores');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar horários:', e);
+                }
+                return {};
+            });
+
+            // Estado do trabalho extra (sábados, domingos, horas extra)
+            const [trabalhoExtra, setTrabalhoExtra] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('trabalhoExtra');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar trabalho extra:', e);
+                }
+                return {};
+            });
+
+            // Estado das ausências (férias, baixas, faltas)
+            const [ausencias, setAusencias] = useState(() => {
+                try {
+                    const saved = localStorage.getItem('ausencias');
+                    if (saved) {
+                        return JSON.parse(saved);
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar ausências:', e);
+                }
+                return {};
+            });
+
+            // Data selecionada no calendário
+            const [dataSelecionada, setDataSelecionada] = useState(new Date().toISOString().split('T')[0]);
+            const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
 
             // Password de administração - ALTERE ESTA PASSWORD!
             const ADMIN_PASSWORD = 'embaresa2025';
@@ -950,6 +1074,193 @@
                 }
             };
 
+            // Funções para gestão de horários
+            const guardarHorarioColaborador = (nome, turno, diasTrabalho = ['seg', 'ter', 'qua', 'qui', 'sex'], semanaInicioTurno1 = null) => {
+                const horarioAtual = horariosColaboradores[nome] || {};
+                const novosHorarios = { 
+                    ...horariosColaboradores, 
+                    [nome]: { 
+                        turno, 
+                        diasTrabalho, 
+                        ativo: true,
+                        semanaInicioTurno1: semanaInicioTurno1 || horarioAtual.semanaInicioTurno1 || getNumeroSemana(new Date().toISOString().split('T')[0])
+                    } 
+                };
+                setHorariosColaboradores(novosHorarios);
+                localStorage.setItem('horariosColaboradores', JSON.stringify(novosHorarios));
+            };
+
+            const removerHorarioColaborador = (nome) => {
+                const novosHorarios = { ...horariosColaboradores };
+                delete novosHorarios[nome];
+                setHorariosColaboradores(novosHorarios);
+                localStorage.setItem('horariosColaboradores', JSON.stringify(novosHorarios));
+            };
+
+            // Funções para trabalho extra
+            const adicionarTrabalhoExtra = (nome, data, horaEntrada, horaSaida) => {
+                const chave = `${nome}_${data}`;
+                const novoExtra = { ...trabalhoExtra, [chave]: { nome, data, horaEntrada, horaSaida } };
+                setTrabalhoExtra(novoExtra);
+                localStorage.setItem('trabalhoExtra', JSON.stringify(novoExtra));
+            };
+
+            const removerTrabalhoExtra = (nome, data) => {
+                const chave = `${nome}_${data}`;
+                const novoExtra = { ...trabalhoExtra };
+                delete novoExtra[chave];
+                setTrabalhoExtra(novoExtra);
+                localStorage.setItem('trabalhoExtra', JSON.stringify(novoExtra));
+            };
+
+            // Funções para ausências
+            const adicionarAusencia = (nome, dataInicio, dataFim, tipo, observacoes = '') => {
+                const id = `${nome}_${dataInicio}_${Date.now()}`;
+                const novasAusencias = { ...ausencias, [id]: { nome, dataInicio, dataFim, tipo, observacoes } };
+                setAusencias(novasAusencias);
+                localStorage.setItem('ausencias', JSON.stringify(novasAusencias));
+            };
+
+            const removerAusencia = (id) => {
+                const novasAusencias = { ...ausencias };
+                delete novasAusencias[id];
+                setAusencias(novasAusencias);
+                localStorage.setItem('ausencias', JSON.stringify(novasAusencias));
+            };
+
+            // Verificar se colaborador tem ausência numa data
+            const temAusencia = (nome, data) => {
+                return Object.values(ausencias).find(a => 
+                    a.nome === nome && 
+                    data >= a.dataInicio && 
+                    data <= a.dataFim
+                );
+            };
+
+            // Obter dia da semana
+            const getDiaSemana = (data) => {
+                const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];
+                return dias[new Date(data).getDay()];
+            };
+
+            // Verificar se colaborador deveria trabalhar numa data
+            const deveriaTrabalhar = (nome, data) => {
+                const horario = horariosColaboradores[nome];
+                if (!horario || !horario.ativo) return false;
+                
+                const diaSemana = getDiaSemana(data);
+                return horario.diasTrabalho.includes(diaSemana);
+            };
+
+            // Verificar se colaborador tem trabalho extra numa data
+            const temTrabalhoExtra = (nome, data) => {
+                const chave = `${nome}_${data}`;
+                return trabalhoExtra[chave];
+            };
+
+            // Obter registos de um colaborador numa data
+            const getRegistosColaboradorDia = (nome, data) => {
+                return registos.filter(r => r.colaborador === nome && r.data === data);
+            };
+
+            // Calcular horas trabalhadas
+            const calcularHorasTrabalhadas = (registosDia) => {
+                let totalMinutos = 0;
+                registosDia.forEach(r => {
+                    if (r.horaInicio && r.horaFim) {
+                        const [hi, mi] = r.horaInicio.split(':').map(Number);
+                        const [hf, mf] = r.horaFim.split(':').map(Number);
+                        let mins = (hf * 60 + mf) - (hi * 60 + mi);
+                        if (mins < 0) mins += 24 * 60;
+                        totalMinutos += mins;
+                    }
+                });
+                return totalMinutos / 60;
+            };
+
+            // Obter estado do colaborador numa data
+            const getEstadoColaborador = (nome, data) => {
+                // Verificar ausência
+                const ausencia = temAusencia(nome, data);
+                if (ausencia) return { estado: 'ausencia', tipo: ausencia.tipo, cor: ausencia.tipo === 'ferias' ? '#3b82f6' : ausencia.tipo === 'baixa' ? '#8b5cf6' : ausencia.tipo === 'falta_just' ? '#f59e0b' : '#ef4444' };
+
+                const horario = horariosColaboradores[nome];
+                const extra = temTrabalhoExtra(nome, data);
+                const registosDia = getRegistosColaboradorDia(nome, data);
+                const horasTrabalhadas = calcularHorasTrabalhadas(registosDia);
+                const diaSemana = getDiaSemana(data);
+                const eFimDeSemana = diaSemana === 'sab' || diaSemana === 'dom';
+
+                // Fim de semana
+                if (eFimDeSemana) {
+                    if (extra) {
+                        if (registosDia.length > 0) {
+                            return { estado: 'extra_ok', cor: '#10b981', horas: horasTrabalhadas };
+                        } else {
+                            return { estado: 'extra_falta', cor: '#ef4444' };
+                        }
+                    }
+                    return { estado: 'folga', cor: '#e5e7eb' };
+                }
+
+                // Dia normal
+                if (!horario || !horario.ativo) {
+                    return { estado: 'nao_configurado', cor: '#9ca3af' };
+                }
+
+                if (!horario.diasTrabalho.includes(diaSemana)) {
+                    return { estado: 'folga', cor: '#e5e7eb' };
+                }
+
+                // Obter turno efetivo (considerando rotação)
+                const turnoEfetivo = getTurnoEfetivo(nome, data);
+                const horasEsperadas = TURNOS[turnoEfetivo]?.horasTrabalho || 7.5;
+
+                if (registosDia.length === 0) {
+                    // Verificar se a data já passou
+                    if (data < new Date().toISOString().split('T')[0]) {
+                        return { estado: 'falta', cor: '#ef4444' };
+                    }
+                    return { estado: 'pendente', cor: '#fbbf24' };
+                }
+
+                if (horasTrabalhadas >= horasEsperadas - 0.5) {
+                    return { estado: 'completo', cor: '#10b981', horas: horasTrabalhadas, turno: turnoEfetivo };
+                } else {
+                    return { estado: 'incompleto', cor: '#f59e0b', horas: horasTrabalhadas, turno: turnoEfetivo };
+                }
+            };
+
+            // Gerar dias do mês
+            const getDiasDoMes = (mesAno) => {
+                const [ano, mes] = mesAno.split('-').map(Number);
+                const primeiroDia = new Date(ano, mes - 1, 1);
+                const ultimoDia = new Date(ano, mes, 0);
+                const dias = [];
+                
+                for (let d = 1; d <= ultimoDia.getDate(); d++) {
+                    const data = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                    dias.push(data);
+                }
+                return dias;
+            };
+
+            // Obter alertas do dia
+            const getAlertasDia = (data) => {
+                const alertas = [];
+                todosColaboradores.forEach(nome => {
+                    const estado = getEstadoColaborador(nome, data);
+                    if (estado.estado === 'falta' || estado.estado === 'extra_falta') {
+                        alertas.push({ nome, tipo: 'falta', mensagem: `${nome} não registou trabalho` });
+                    } else if (estado.estado === 'incompleto') {
+                        alertas.push({ nome, tipo: 'incompleto', mensagem: `${nome} registou apenas ${estado.horas?.toFixed(1)}h` });
+                    } else if (estado.estado === 'pendente' && data === new Date().toISOString().split('T')[0]) {
+                        alertas.push({ nome, tipo: 'pendente', mensagem: `${nome} ainda não registou hoje` });
+                    }
+                });
+                return alertas;
+            };
+
             // Painel de Administração
             if (showAdmin) {
                 if (!adminAuthed) {
@@ -993,23 +1304,30 @@
 
                         {/* Tabs */}
                         <div style={{ display: 'flex', background: '#2d2d2d', borderBottom: '1px solid #444', flexWrap: 'wrap' }}>
-                            {['importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores'].map(tab => (
+                            {['importar', 'artigos', 'operacoes', 'perturbacoes', 'colaboradores', 'horarios', 'calendario', 'ausencias'].map(tab => (
                                 <button
                                     key={tab}
                                     onClick={() => setAdminTab(tab)}
                                     style={{
                                         flex: 1,
-                                        minWidth: '80px',
-                                        padding: '12px 8px',
+                                        minWidth: '70px',
+                                        padding: '12px 6px',
                                         background: adminTab === tab ? '#1e1e1e' : 'transparent',
                                         color: adminTab === tab ? '#3b82f6' : '#888',
                                         border: 'none',
                                         borderBottom: adminTab === tab ? '2px solid #3b82f6' : '2px solid transparent',
-                                        fontSize: '12px',
+                                        fontSize: '11px',
                                         fontWeight: '600'
                                     }}
                                 >
-                                    {tab === 'artigos' ? '📦 Artigos' : tab === 'operacoes' ? '🔧 Operações' : tab === 'perturbacoes' ? '⚠️ Perturb.' : tab === 'colaboradores' ? '👤 Colab.' : '📥 Import'}
+                                    {tab === 'artigos' ? '📦 Artigos' : 
+                                     tab === 'operacoes' ? '🔧 Operações' : 
+                                     tab === 'perturbacoes' ? '⚠️ Perturb.' : 
+                                     tab === 'colaboradores' ? '👤 Colab.' : 
+                                     tab === 'horarios' ? '🕐 Horários' :
+                                     tab === 'calendario' ? '📅 Calendário' :
+                                     tab === 'ausencias' ? '🏖️ Ausências' :
+                                     '📥 Import'}
                                 </button>
                             ))}
                         </div>
@@ -1361,6 +1679,581 @@
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Tab Horários */}
+                            {adminTab === 'horarios' && (
+                                <div>
+                                    {/* Info dos Turnos */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>🕐 Turnos Disponíveis</h3>
+                                        <div style={{ display: 'grid', gap: '10px' }}>
+                                            {Object.entries(TURNOS).filter(([k]) => k !== 'extra').map(([key, turno]) => (
+                                                <div key={key} style={{ background: '#3d3d3d', borderRadius: '8px', padding: '12px' }}>
+                                                    <div style={{ color: key === 'rotativo' ? '#f59e0b' : '#3b82f6', fontWeight: '700', marginBottom: '5px' }}>{turno.nome}</div>
+                                                    <div style={{ color: '#aaa', fontSize: '12px' }}>
+                                                        {key === 'rotativo' 
+                                                            ? 'Alterna semanalmente entre Turno 1 e Turno 2'
+                                                            : `${turno.entrada} - ${turno.saida} | Refeição: ${turno.refeicaoInicio}-${turno.refeicaoFim} | ${turno.horasTrabalho}h`
+                                                        }
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Semana Atual */}
+                                    <div style={{ background: '#1e3a5f', borderRadius: '12px', padding: '15px', marginBottom: '20px', border: '1px solid #3b82f6' }}>
+                                        <div style={{ color: '#93c5fd', fontSize: '12px' }}>Semana Atual</div>
+                                        <div style={{ color: 'white', fontSize: '24px', fontWeight: '700' }}>
+                                            Semana {getNumeroSemana(new Date().toISOString().split('T')[0])} de {new Date().getFullYear()}
+                                        </div>
+                                    </div>
+
+                                    {/* Lista de Colaboradores com Horário */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>👥 Horários dos Colaboradores</h3>
+                                        {todosColaboradores.map((nome, i) => {
+                                            const horario = horariosColaboradores[nome] || { turno: '', diasTrabalho: ['seg', 'ter', 'qua', 'qui', 'sex'], semanaInicioTurno1: getNumeroSemana(new Date().toISOString().split('T')[0]) };
+                                            const diasSemana = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'];
+                                            const turnoHoje = getTurnoEfetivo(nome, new Date().toISOString().split('T')[0]);
+                                            
+                                            return (
+                                                <div key={i} style={{ background: '#3d3d3d', borderRadius: '8px', padding: '15px', marginBottom: '10px' }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                                                        <div style={{ color: 'white', fontWeight: '700', fontSize: '14px' }}>{nome}</div>
+                                                        {horario.turno && turnoHoje && (
+                                                            <div style={{ 
+                                                                background: turnoHoje === 'turno1' ? '#059669' : turnoHoje === 'turno2' ? '#7c3aed' : '#3b82f6', 
+                                                                color: 'white', 
+                                                                padding: '4px 10px', 
+                                                                borderRadius: '12px', 
+                                                                fontSize: '11px',
+                                                                fontWeight: '600'
+                                                            }}>
+                                                                Hoje: {TURNOS[turnoHoje]?.nome || turnoHoje}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Seleção de Turno */}
+                                                    <div style={{ marginBottom: '10px' }}>
+                                                        <label style={{ color: '#aaa', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Tipo de Horário:</label>
+                                                        <select
+                                                            value={horario.turno || ''}
+                                                            onChange={(e) => guardarHorarioColaborador(nome, e.target.value, horario.diasTrabalho, horario.semanaInicioTurno1)}
+                                                            style={{ width: '100%', padding: '8px', borderRadius: '6px', border: 'none', background: '#2d2d2d', color: 'white', fontSize: '14px' }}
+                                                        >
+                                                            <option value="">-- Selecionar --</option>
+                                                            <option value="rotativo">🔄 Rotativo (Turno 1 ↔ Turno 2)</option>
+                                                            <option value="turno1">Turno 1 Fixo (07:00-15:00)</option>
+                                                            <option value="turno2">Turno 2 Fixo (14:00-22:00)</option>
+                                                            <option value="normal">Normal Fixo (08:00-17:30)</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Se rotativo, mostrar em que turno começa */}
+                                                    {horario.turno === 'rotativo' && (
+                                                        <div style={{ marginBottom: '10px', background: '#2d2d2d', borderRadius: '6px', padding: '10px' }}>
+                                                            <label style={{ color: '#f59e0b', fontSize: '12px', display: 'block', marginBottom: '5px' }}>
+                                                                🔄 Esta semana está no:
+                                                            </label>
+                                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const semanaAtual = getNumeroSemana(new Date().toISOString().split('T')[0]);
+                                                                        guardarHorarioColaborador(nome, 'rotativo', horario.diasTrabalho, semanaAtual);
+                                                                    }}
+                                                                    style={{
+                                                                        flex: 1,
+                                                                        padding: '10px',
+                                                                        borderRadius: '6px',
+                                                                        border: 'none',
+                                                                        background: turnoHoje === 'turno1' ? '#059669' : '#3d3d3d',
+                                                                        color: 'white',
+                                                                        fontWeight: '600',
+                                                                        fontSize: '13px'
+                                                                    }}
+                                                                >
+                                                                    Turno 1
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const semanaAtual = getNumeroSemana(new Date().toISOString().split('T')[0]);
+                                                                        guardarHorarioColaborador(nome, 'rotativo', horario.diasTrabalho, semanaAtual + 1);
+                                                                    }}
+                                                                    style={{
+                                                                        flex: 1,
+                                                                        padding: '10px',
+                                                                        borderRadius: '6px',
+                                                                        border: 'none',
+                                                                        background: turnoHoje === 'turno2' ? '#7c3aed' : '#3d3d3d',
+                                                                        color: 'white',
+                                                                        fontWeight: '600',
+                                                                        fontSize: '13px'
+                                                                    }}
+                                                                >
+                                                                    Turno 2
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Dias de Trabalho */}
+                                                    <div>
+                                                        <label style={{ color: '#aaa', fontSize: '12px', display: 'block', marginBottom: '5px' }}>Dias de Trabalho:</label>
+                                                        <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                                            {diasSemana.map(dia => (
+                                                                <button
+                                                                    key={dia}
+                                                                    onClick={() => {
+                                                                        const novosDias = horario.diasTrabalho.includes(dia)
+                                                                            ? horario.diasTrabalho.filter(d => d !== dia)
+                                                                            : [...horario.diasTrabalho, dia];
+                                                                        guardarHorarioColaborador(nome, horario.turno, novosDias, horario.semanaInicioTurno1);
+                                                                    }}
+                                                                    style={{
+                                                                        padding: '6px 10px',
+                                                                        borderRadius: '6px',
+                                                                        border: 'none',
+                                                                        background: horario.diasTrabalho.includes(dia) ? '#3b82f6' : '#2d2d2d',
+                                                                        color: horario.diasTrabalho.includes(dia) ? 'white' : '#888',
+                                                                        fontSize: '11px',
+                                                                        fontWeight: '600',
+                                                                        textTransform: 'uppercase'
+                                                                    }}
+                                                                >
+                                                                    {dia}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Exceções de Turno */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginTop: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>⚡ Alterar Turno (Exceção Semanal)</h3>
+                                        <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '15px' }}>
+                                            Use isto para alterar pontualmente o turno de um colaborador numa semana específica.
+                                        </p>
+                                        <div style={{ display: 'grid', gap: '10px' }}>
+                                            <select
+                                                id="excecaoColaborador"
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            >
+                                                <option value="">Selecionar Colaborador...</option>
+                                                {todosColaboradores.map((nome, i) => (
+                                                    <option key={i} value={nome}>{nome}</option>
+                                                ))}
+                                            </select>
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <input
+                                                    type="number"
+                                                    id="excecaoSemana"
+                                                    defaultValue={getNumeroSemana(new Date().toISOString().split('T')[0])}
+                                                    min="1"
+                                                    max="53"
+                                                    placeholder="Semana"
+                                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                />
+                                                <input
+                                                    type="number"
+                                                    id="excecaoAno"
+                                                    defaultValue={new Date().getFullYear()}
+                                                    placeholder="Ano"
+                                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                />
+                                            </div>
+                                            <select
+                                                id="excecaoTurno"
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            >
+                                                <option value="">Novo Turno...</option>
+                                                <option value="turno1">Turno 1 (07:00-15:00)</option>
+                                                <option value="turno2">Turno 2 (14:00-22:00)</option>
+                                                <option value="normal">Normal (08:00-17:30)</option>
+                                            </select>
+                                            <button 
+                                                onClick={() => {
+                                                    const nome = document.getElementById('excecaoColaborador').value;
+                                                    const semana = parseInt(document.getElementById('excecaoSemana').value);
+                                                    const ano = parseInt(document.getElementById('excecaoAno').value);
+                                                    const turno = document.getElementById('excecaoTurno').value;
+                                                    if (!nome || !semana || !ano || !turno) {
+                                                        alert('Preencha todos os campos!');
+                                                        return;
+                                                    }
+                                                    definirExcecaoTurno(nome, ano, semana, turno);
+                                                    alert(`✅ ${nome} vai fazer ${TURNOS[turno].nome} na semana ${semana}!`);
+                                                }}
+                                                style={{ padding: '12px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}
+                                            >
+                                                Definir Exceção
+                                            </button>
+                                        </div>
+
+                                        {/* Lista de Exceções */}
+                                        {Object.keys(excecoesTurno).length > 0 && (
+                                            <div style={{ marginTop: '20px' }}>
+                                                <h4 style={{ color: '#aaa', margin: '0 0 10px 0', fontSize: '14px' }}>📋 Exceções Definidas</h4>
+                                                {Object.entries(excecoesTurno).map(([chave, turno]) => {
+                                                    const [nome, ano, semana] = chave.split('_');
+                                                    return (
+                                                        <div key={chave} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                            <div>
+                                                                <div style={{ color: 'white', fontWeight: '600', fontSize: '13px' }}>{nome}</div>
+                                                                <div style={{ color: '#aaa', fontSize: '11px' }}>Semana {semana}/{ano} → {TURNOS[turno]?.nome}</div>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => removerExcecaoTurno(nome, ano, semana)} 
+                                                                style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}
+                                                            >
+                                                                🗑️
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab Calendário */}
+                            {adminTab === 'calendario' && (
+                                <div>
+                                    {/* Seleção de Mês */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                                            <button 
+                                                onClick={() => {
+                                                    const [ano, mes] = mesSelecionado.split('-').map(Number);
+                                                    const novaData = new Date(ano, mes - 2, 1);
+                                                    setMesSelecionado(novaData.toISOString().slice(0, 7));
+                                                }}
+                                                style={{ background: '#3d3d3d', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', fontSize: '16px' }}
+                                            >
+                                                ←
+                                            </button>
+                                            <h3 style={{ color: 'white', margin: 0, fontSize: '18px' }}>
+                                                {new Date(mesSelecionado + '-01').toLocaleDateString('pt-PT', { month: 'long', year: 'numeric' })}
+                                            </h3>
+                                            <button 
+                                                onClick={() => {
+                                                    const [ano, mes] = mesSelecionado.split('-').map(Number);
+                                                    const novaData = new Date(ano, mes, 1);
+                                                    setMesSelecionado(novaData.toISOString().slice(0, 7));
+                                                }}
+                                                style={{ background: '#3d3d3d', border: 'none', color: 'white', padding: '8px 16px', borderRadius: '8px', fontSize: '16px' }}
+                                            >
+                                                →
+                                            </button>
+                                        </div>
+
+                                        {/* Legenda */}
+                                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#10b981' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Completo</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#f59e0b' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Incompleto</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Falta</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#3b82f6' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Férias</span>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: '#e5e7eb' }}></div>
+                                                <span style={{ color: '#aaa', fontSize: '11px' }}>Folga</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Alertas do Dia */}
+                                    {(() => {
+                                        const hoje = new Date().toISOString().split('T')[0];
+                                        const alertas = getAlertasDia(hoje);
+                                        if (alertas.length === 0) return null;
+                                        
+                                        return (
+                                            <div style={{ background: '#451a03', borderRadius: '12px', padding: '20px', marginBottom: '20px', border: '1px solid #f59e0b' }}>
+                                                <h3 style={{ color: '#fbbf24', margin: '0 0 15px 0', fontSize: '16px' }}>⚠️ Alertas de Hoje</h3>
+                                                {alertas.map((alerta, i) => (
+                                                    <div key={i} style={{ 
+                                                        background: alerta.tipo === 'falta' ? '#7f1d1d' : alerta.tipo === 'incompleto' ? '#78350f' : '#3d3d3d', 
+                                                        borderRadius: '8px', 
+                                                        padding: '10px', 
+                                                        marginBottom: '8px',
+                                                        color: 'white',
+                                                        fontSize: '13px'
+                                                    }}>
+                                                        {alerta.mensagem}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Tabela Calendário */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '15px', overflowX: 'auto' }}>
+                                        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '800px' }}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={{ color: '#aaa', padding: '8px', textAlign: 'left', fontSize: '12px', borderBottom: '1px solid #444', position: 'sticky', left: 0, background: '#2d2d2d' }}>Colaborador</th>
+                                                    {getDiasDoMes(mesSelecionado).map(data => {
+                                                        const diaSemana = getDiaSemana(data);
+                                                        const eFimDeSemana = diaSemana === 'sab' || diaSemana === 'dom';
+                                                        return (
+                                                            <th key={data} style={{ 
+                                                                color: eFimDeSemana ? '#f59e0b' : '#aaa', 
+                                                                padding: '4px', 
+                                                                textAlign: 'center', 
+                                                                fontSize: '10px', 
+                                                                borderBottom: '1px solid #444',
+                                                                minWidth: '28px'
+                                                            }}>
+                                                                {data.split('-')[2]}
+                                                            </th>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {todosColaboradores.map((nome, i) => (
+                                                    <tr key={i}>
+                                                        <td style={{ color: 'white', padding: '8px', fontSize: '11px', borderBottom: '1px solid #333', position: 'sticky', left: 0, background: '#2d2d2d', whiteSpace: 'nowrap' }}>
+                                                            {nome.split(' ')[0]} {nome.split(' ').slice(-1)[0]}
+                                                        </td>
+                                                        {getDiasDoMes(mesSelecionado).map(data => {
+                                                            const estado = getEstadoColaborador(nome, data);
+                                                            return (
+                                                                <td key={data} style={{ padding: '4px', textAlign: 'center', borderBottom: '1px solid #333' }}>
+                                                                    <div 
+                                                                        onClick={() => setDataSelecionada(data)}
+                                                                        style={{ 
+                                                                            width: '20px', 
+                                                                            height: '20px', 
+                                                                            borderRadius: '4px', 
+                                                                            background: estado.cor,
+                                                                            margin: '0 auto',
+                                                                            cursor: 'pointer',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            fontSize: '8px'
+                                                                        }}
+                                                                        title={`${nome} - ${data}: ${estado.estado}${estado.horas ? ` (${estado.horas.toFixed(1)}h)` : ''}`}
+                                                                    >
+                                                                        {estado.estado === 'extra_ok' && '⭐'}
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Adicionar Trabalho Extra */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginTop: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>➕ Adicionar Trabalho Extra</h3>
+                                        <div style={{ display: 'grid', gap: '10px' }}>
+                                            <select
+                                                id="extraColaborador"
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            >
+                                                <option value="">Selecionar Colaborador...</option>
+                                                {todosColaboradores.map((nome, i) => (
+                                                    <option key={i} value={nome}>{nome}</option>
+                                                ))}
+                                            </select>
+                                            <input
+                                                type="date"
+                                                id="extraData"
+                                                defaultValue={new Date().toISOString().split('T')[0]}
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            />
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <input
+                                                    type="time"
+                                                    id="extraEntrada"
+                                                    placeholder="Entrada"
+                                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                />
+                                                <input
+                                                    type="time"
+                                                    id="extraSaida"
+                                                    placeholder="Saída"
+                                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                />
+                                            </div>
+                                            <button 
+                                                onClick={() => {
+                                                    const nome = document.getElementById('extraColaborador').value;
+                                                    const data = document.getElementById('extraData').value;
+                                                    const entrada = document.getElementById('extraEntrada').value;
+                                                    const saida = document.getElementById('extraSaida').value;
+                                                    if (!nome || !data || !entrada || !saida) {
+                                                        alert('Preencha todos os campos!');
+                                                        return;
+                                                    }
+                                                    adicionarTrabalhoExtra(nome, data, entrada, saida);
+                                                    alert('✅ Trabalho extra adicionado!');
+                                                }}
+                                                style={{ padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}
+                                            >
+                                                Adicionar Trabalho Extra
+                                            </button>
+                                        </div>
+
+                                        {/* Lista de Trabalho Extra */}
+                                        {Object.keys(trabalhoExtra).length > 0 && (
+                                            <div style={{ marginTop: '20px' }}>
+                                                <h4 style={{ color: '#aaa', margin: '0 0 10px 0', fontSize: '14px' }}>📋 Trabalho Extra Agendado</h4>
+                                                {Object.entries(trabalhoExtra).map(([key, extra]) => (
+                                                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px' }}>
+                                                        <div>
+                                                            <div style={{ color: 'white', fontWeight: '600', fontSize: '13px' }}>{extra.nome}</div>
+                                                            <div style={{ color: '#aaa', fontSize: '11px' }}>{extra.data} | {extra.horaEntrada} - {extra.horaSaida}</div>
+                                                        </div>
+                                                        <button onClick={() => removerTrabalhoExtra(extra.nome, extra.data)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Tab Ausências */}
+                            {adminTab === 'ausencias' && (
+                                <div>
+                                    {/* Adicionar Ausência */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px', marginBottom: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>🏖️ Registar Ausência</h3>
+                                        <div style={{ display: 'grid', gap: '10px' }}>
+                                            <select
+                                                id="ausenciaColaborador"
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            >
+                                                <option value="">Selecionar Colaborador...</option>
+                                                {todosColaboradores.map((nome, i) => (
+                                                    <option key={i} value={nome}>{nome}</option>
+                                                ))}
+                                            </select>
+                                            <select
+                                                id="ausenciaTipo"
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            >
+                                                <option value="">Tipo de Ausência...</option>
+                                                <option value="ferias">🏖️ Férias</option>
+                                                <option value="baixa">🏥 Baixa Médica</option>
+                                                <option value="falta_just">📋 Falta Justificada</option>
+                                                <option value="falta_injust">❌ Falta Injustificada</option>
+                                            </select>
+                                            <div style={{ display: 'flex', gap: '10px' }}>
+                                                <div style={{ flex: 1 }}>
+                                                    <label style={{ color: '#aaa', fontSize: '11px', display: 'block', marginBottom: '5px' }}>Data Início:</label>
+                                                    <input
+                                                        type="date"
+                                                        id="ausenciaInicio"
+                                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                    />
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <label style={{ color: '#aaa', fontSize: '11px', display: 'block', marginBottom: '5px' }}>Data Fim:</label>
+                                                    <input
+                                                        type="date"
+                                                        id="ausenciaFim"
+                                                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                id="ausenciaObs"
+                                                placeholder="Observações (opcional)..."
+                                                style={{ padding: '10px', borderRadius: '8px', border: 'none', background: '#3d3d3d', color: 'white', fontSize: '14px' }}
+                                            />
+                                            <button 
+                                                onClick={() => {
+                                                    const nome = document.getElementById('ausenciaColaborador').value;
+                                                    const tipo = document.getElementById('ausenciaTipo').value;
+                                                    const inicio = document.getElementById('ausenciaInicio').value;
+                                                    const fim = document.getElementById('ausenciaFim').value;
+                                                    const obs = document.getElementById('ausenciaObs').value;
+                                                    if (!nome || !tipo || !inicio || !fim) {
+                                                        alert('Preencha todos os campos obrigatórios!');
+                                                        return;
+                                                    }
+                                                    if (fim < inicio) {
+                                                        alert('Data fim deve ser igual ou posterior à data início!');
+                                                        return;
+                                                    }
+                                                    adicionarAusencia(nome, inicio, fim, tipo, obs);
+                                                    alert('✅ Ausência registada!');
+                                                    document.getElementById('ausenciaObs').value = '';
+                                                }}
+                                                style={{ padding: '12px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: '600' }}
+                                            >
+                                                Registar Ausência
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Lista de Ausências */}
+                                    <div style={{ background: '#2d2d2d', borderRadius: '12px', padding: '20px' }}>
+                                        <h3 style={{ color: 'white', margin: '0 0 15px 0', fontSize: '16px' }}>📋 Ausências Registadas</h3>
+                                        {Object.keys(ausencias).length === 0 ? (
+                                            <p style={{ color: '#888', fontSize: '14px' }}>Nenhuma ausência registada.</p>
+                                        ) : (
+                                            Object.entries(ausencias)
+                                                .sort(([, a], [, b]) => b.dataInicio.localeCompare(a.dataInicio))
+                                                .map(([id, ausencia]) => {
+                                                    const tipoLabels = {
+                                                        'ferias': { emoji: '🏖️', label: 'Férias', cor: '#3b82f6' },
+                                                        'baixa': { emoji: '🏥', label: 'Baixa Médica', cor: '#8b5cf6' },
+                                                        'falta_just': { emoji: '📋', label: 'Falta Justificada', cor: '#f59e0b' },
+                                                        'falta_injust': { emoji: '❌', label: 'Falta Injustificada', cor: '#ef4444' }
+                                                    };
+                                                    const tipoInfo = tipoLabels[ausencia.tipo] || { emoji: '❓', label: 'Outro', cor: '#888' };
+                                                    
+                                                    return (
+                                                        <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#3d3d3d', borderRadius: '8px', marginBottom: '8px', borderLeft: `4px solid ${tipoInfo.cor}` }}>
+                                                            <div>
+                                                                <div style={{ color: 'white', fontWeight: '600', fontSize: '14px' }}>{ausencia.nome}</div>
+                                                                <div style={{ color: tipoInfo.cor, fontSize: '12px', marginTop: '3px' }}>{tipoInfo.emoji} {tipoInfo.label}</div>
+                                                                <div style={{ color: '#aaa', fontSize: '11px', marginTop: '3px' }}>
+                                                                    {ausencia.dataInicio === ausencia.dataFim 
+                                                                        ? ausencia.dataInicio 
+                                                                        : `${ausencia.dataInicio} → ${ausencia.dataFim}`
+                                                                    }
+                                                                </div>
+                                                                {ausencia.observacoes && (
+                                                                    <div style={{ color: '#888', fontSize: '11px', marginTop: '3px', fontStyle: 'italic' }}>{ausencia.observacoes}</div>
+                                                                )}
+                                                            </div>
+                                                            <button onClick={() => removerAusencia(id)} style={{ background: '#dc2626', border: 'none', color: 'white', padding: '6px 12px', borderRadius: '6px', fontSize: '12px' }}>
+                                                                🗑️
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>

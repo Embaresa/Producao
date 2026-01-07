@@ -40,7 +40,78 @@
         // URLs do Power Automate configurados
         const POWER_AUTOMATE_PRODUCAO = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7d6d064896034900976cdbe6fecbd809/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o25Z-eFD68rkovgpItkF2MLL1wKINpkqRFsIZXBYWv8';
         const POWER_AUTOMATE_PERTURBACOES = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4';
+// URL do Power Automate para carregar configurações do Excel
+        const POWER_AUTOMATE_CONFIG = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5da3828d37564c2ba8af16ca06e2b7e0/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NRb520YI7wcDJjMufAfUzrlYIQSQ3ub6dl1KrQ3_FxI';
+// Função para carregar configurações do Excel via Power Automate
+        const carregarConfiguracoes = async () => {
+            try {
+                console.log('🔄 A carregar configurações do Excel...');
+                
+                const response = await fetch(POWER_AUTOMATE_CONFIG, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const config = await response.json();
+                console.log('✅ Configurações carregadas:', config);
+                
+                localStorage.setItem('configRemota', JSON.stringify(config));
+                localStorage.setItem('configRemotaTimestamp', Date.now().toString());
+                
+                return config;
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar configurações:', error);
+                
+                const cached = localStorage.getItem('configRemota');
+                if (cached) {
+                    console.log('📦 A usar configurações em cache');
+                    return JSON.parse(cached);
+                }
+                
+                return null;
+            }
+        };
 
+        const processarColaboradores = (config) => {
+            if (!config || !config.colaboradores) return [];
+            return config.colaboradores
+                .filter(c => c.Ativo === 'Sim' || c.Ativo === true || c.Ativo === 1 || c.Ativo === 'TRUE')
+                .map(c => c.Nome)
+                .filter(n => n)
+                .sort();
+        };
+
+        const processarHorarios = (config) => {
+            if (!config || !config.colaboradores) return {};
+            const horarios = {};
+            config.colaboradores.forEach(c => {
+                if (c.Ativo === 'Sim' || c.Ativo === true || c.Ativo === 1 || c.Ativo === 'TRUE') {
+                    horarios[c.Nome] = {
+                        turno: c.Turno || 'normal',
+                        diasTrabalho: c.DiasTrabalho ? c.DiasTrabalho.split(',').map(d => d.trim()) : ['seg', 'ter', 'qua', 'qui', 'sex'],
+                        semanaInicioTurno1: parseInt(c.SemanaInicioTurno1) || 1,
+                        ativo: true
+                    };
+                }
+            });
+            return horarios;
+        };
+
+        const processarAusencias = (config) => {
+            if (!config || !config.ausencias) return {};
+            const ausencias = {};
+            config.ausencias.forEach((a, idx) => {
+
+        
         const App = () => {
             const [view, setView] = useState('form'); // 'form', 'registos', 'perturbacao', 'operacao'
             const [registos, setRegistos] = useState([]);
@@ -50,20 +121,61 @@
             const [syncStatus, setSyncStatus] = useState({ online: true, pendentes: 0 });
             const [configUrl, setConfigUrl] = useState(false);
 
-            useEffect(() => {
-                const saved = localStorage.getItem('registosPendentes');
-                if (saved) {
-                    setRegistos(JSON.parse(saved));
-                }
-                if (operadorNome) {
-                    setConfigured(true);
-                }
-                if (POWER_AUTOMATE_PRODUCAO === 'COLE_AQUI_URL_FLOW_PRODUCAO') {
-                    setConfigUrl(true);
-                }
-                updateSyncStatus();
+           useEffect(() => {
+                const inicializar = async () => {
+                    // Carregar configurações remotas do Excel
+                    const config = await carregarConfiguracoes();
+                    
+                    if (config) {
+                        // Atualizar colaboradores
+                        const colaboradoresRemoto = processarColaboradores(config);
+                        if (colaboradoresRemoto.length > 0) {
+                            setCustomColaboradores(colaboradoresRemoto);
+                            localStorage.setItem('customColaboradores', JSON.stringify(colaboradoresRemoto));
+                            console.log('👥 Colaboradores carregados:', colaboradoresRemoto.length);
+                        }
+                        
+                        // Atualizar horários
+                        const horariosRemoto = processarHorarios(config);
+                        if (Object.keys(horariosRemoto).length > 0) {
+                            setHorariosColaboradores(horariosRemoto);
+                            localStorage.setItem('horariosColaboradores', JSON.stringify(horariosRemoto));
+                            console.log('🕐 Horários carregados:', Object.keys(horariosRemoto).length);
+                        }
+                        
+                        // Atualizar ausências
+                        const ausenciasRemoto = processarAusencias(config);
+                        if (Object.keys(ausenciasRemoto).length > 0) {
+                            setAusencias(ausenciasRemoto);
+                            localStorage.setItem('ausencias', JSON.stringify(ausenciasRemoto));
+                            console.log('🏖️ Ausências carregadas:', Object.keys(ausenciasRemoto).length);
+                        }
+                        
+                        // Atualizar feriados personalizados
+                        const feriadosRemoto = processarFeriados(config);
+                        if (feriadosRemoto.length > 0) {
+                            setFeriadosPersonalizados(feriadosRemoto);
+                            localStorage.setItem('feriadosPersonalizados', JSON.stringify(feriadosRemoto));
+                            console.log('🎉 Feriados carregados:', feriadosRemoto.length);
+                        }
+                    }
+                    
+                    // Carregar dados locais existentes
+                    const saved = localStorage.getItem('registosPendentes');
+                    if (saved) {
+                        setRegistos(JSON.parse(saved));
+                    }
+                    if (operadorNome) {
+                        setConfigured(true);
+                    }
+                    if (POWER_AUTOMATE_PRODUCAO === 'COLE_AQUI_URL_FLOW_PRODUCAO') {
+                        setConfigUrl(true);
+                    }
+                    updateSyncStatus();
+                };
+                
+                inicializar();
             }, []);
-
             useEffect(() => {
                 localStorage.setItem('registosPendentes', JSON.stringify(registos));
                 updateSyncStatus();
@@ -621,7 +733,9 @@
             const todosArtigos = [...artigos, ...customArtigos].filter(a => a && a.Artigo);
             const todasOperacoes = [...operacoes, ...customOperacoes].filter(o => o && o.Op);
             const todasPerturbacoes = [...tiposPerturbacao, ...customPerturbacoes].filter(p => p);
-            const todosColaboradores = [...trabalhadores, ...customColaboradores].filter(c => c).sort();
+            const todosColaboradores = customColaboradores.length > 0 
+                ? customColaboradores.filter(c => c).sort()
+                : [...trabalhadores, ...customColaboradores].filter(c => c).sort();
 
             const calcularDuracao = (inicio, fim) => {
                 if (!inicio || !fim) return '';

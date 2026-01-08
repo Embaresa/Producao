@@ -46,6 +46,45 @@
         // URL do Power Automate para ESCRITA de configurações no Excel
         const POWER_AUTOMATE_ESCRITA = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7ac8ac76458141b3bdbf0a981e9bf727/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=r5BztBsGszRYRdEyojb8qC5aTfPcYrxZLaMi8-eFmPE';
         
+        // URL do Power Automate para ATUALIZAR colaboradores no Excel
+        const POWER_AUTOMATE_ATUALIZAR_COLABORADOR = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/2969f32dd4b84980a9b110aabe0f9e5d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=sHlfbWcJlbQFnY47LAkdeuL8Uq03ZlAbikDP-RABXZ8';
+        
+        // Função para ATUALIZAR colaborador no Excel via Power Automate
+        const atualizarColaboradorNoExcel = async (nome, turno, diasTrabalho, semanaInicioTurno1) => {
+            try {
+                console.log(`🔄 A atualizar colaborador ${nome}...`);
+                
+                const response = await fetch(POWER_AUTOMATE_ATUALIZAR_COLABORADOR, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        Nome: nome,
+                        Turno: turno,
+                        DiasTrabalho: diasTrabalho,
+                        SemanaInicioTurno1: semanaInicioTurno1.toString()
+                    })
+                });
+                
+                if (response.ok || response.status === 202) {
+                    console.log(`✅ Colaborador ${nome} atualizado no Excel!`);
+                    return true;
+                } else {
+                    console.error(`❌ Erro ao atualizar ${nome}:`, response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error(`❌ Erro ao atualizar ${nome}:`, error);
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    console.log('Possível erro CORS - verificar no Power Automate se foi recebido');
+                    return true;
+                }
+                return false;
+            }
+        };
+        
         // Função para ESCREVER configurações no Excel via Power Automate
         const guardarNoExcel = async (tabela, dados) => {
             try {
@@ -1515,19 +1554,24 @@
             };
 
             // Funções para gestão de horários
-            const guardarHorarioColaborador = (nome, turno, diasTrabalho = ['seg', 'ter', 'qua', 'qui', 'sex'], semanaInicioTurno1 = null) => {
+            const guardarHorarioColaborador = async (nome, turno, diasTrabalho = ['seg', 'ter', 'qua', 'qui', 'sex'], semanaInicioTurno1 = null) => {
                 const horarioAtual = horariosColaboradores[nome] || {};
+                const semanaFinal = semanaInicioTurno1 || horarioAtual.semanaInicioTurno1 || getNumeroSemana(new Date().toISOString().split('T')[0]);
                 const novosHorarios = { 
                     ...horariosColaboradores, 
                     [nome]: { 
                         turno, 
                         diasTrabalho, 
                         ativo: true,
-                        semanaInicioTurno1: semanaInicioTurno1 || horarioAtual.semanaInicioTurno1 || getNumeroSemana(new Date().toISOString().split('T')[0])
+                        semanaInicioTurno1: semanaFinal
                     } 
                 };
                 setHorariosColaboradores(novosHorarios);
                 localStorage.setItem('horariosColaboradores', JSON.stringify(novosHorarios));
+                
+                // Atualizar no Excel via Power Automate
+                const diasTrabalhoStr = Array.isArray(diasTrabalho) ? diasTrabalho.join(',') : diasTrabalho;
+                await atualizarColaboradorNoExcel(nome, turno, diasTrabalhoStr, semanaFinal);
             };
 
             const removerHorarioColaborador = (nome) => {
@@ -3839,6 +3883,9 @@
 
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
+</body>
+</html>
+
 </body>
 </html>
 

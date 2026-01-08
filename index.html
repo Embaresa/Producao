@@ -43,6 +43,9 @@
 // URL do Power Automate para carregar configurações do Excel
         const POWER_AUTOMATE_CONFIG = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5da3828d37564c2ba8af16ca06e2b7e0/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NRb520YI7wcDJjMufAfUzrlYIQSQ3ub6dl1KrQ3_FxI';
         
+        // URL do Power Automate para LER registos de produção do Excel
+        const POWER_AUTOMATE_LER_REGISTOS = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/630775c56a8e4ea18c0c55e5ee199828/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=nsXoJ_bRoYq09UVkNESpbL8arpQGFCWHFPnFGzpF6Go';
+        
         // URL do Power Automate para ESCRITA de configurações no Excel
         const POWER_AUTOMATE_ESCRITA = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7ac8ac76458141b3bdbf0a981e9bf727/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=r5BztBsGszRYRdEyojb8qC5aTfPcYrxZLaMi8-eFmPE';
         
@@ -118,6 +121,63 @@
                     return true;
                 }
                 return false;
+            }
+        };
+        
+        // Função para carregar registos de produção do Excel via Power Automate
+        const carregarRegistosProducao = async () => {
+            try {
+                console.log('📊 A carregar registos de produção do Excel...');
+                
+                const response = await fetch(POWER_AUTOMATE_LER_REGISTOS, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({})
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const registos = await response.json();
+                console.log('✅ Registos de produção carregados:', registos.length);
+                
+                // Converter para o formato esperado pela app
+                const registosFormatados = {};
+                registos.forEach((r, idx) => {
+                    if (r.Colaborador && r.Data) {
+                        const id = `${r.Colaborador}_${r.Data}_${idx}`;
+                        registosFormatados[id] = {
+                            colaborador: r.Colaborador,
+                            data: r.Data,
+                            artigo: r.Artigo || '',
+                            operacao: r.Operacao || '',
+                            horaInicio: r.HoraInicio || '',
+                            horaFim: r.HoraFim || '',
+                            quantidadeProduzida: r.QuantidadeProduzida || 0,
+                            observacoes: r.Observacoes || ''
+                        };
+                    }
+                });
+                
+                localStorage.setItem('registosProducao', JSON.stringify(registosFormatados));
+                localStorage.setItem('registosProducaoTimestamp', Date.now().toString());
+                
+                return registosFormatados;
+                
+            } catch (error) {
+                console.error('❌ Erro ao carregar registos:', error);
+                
+                const cached = localStorage.getItem('registosProducao');
+                if (cached) {
+                    console.log('📦 A usar registos em cache');
+                    return JSON.parse(cached);
+                }
+                
+                return {};
             }
         };
 // Função para carregar configurações do Excel via Power Automate
@@ -216,6 +276,7 @@
         const App = () => {
             const [view, setView] = useState('form'); // 'form', 'registos', 'perturbacao', 'operacao'
             const [registos, setRegistos] = useState([]);
+            const [registosProducaoRemoto, setRegistosProducaoRemoto] = useState({});
             const [operadorNome, setOperadorNome] = useState(localStorage.getItem('operadorNome') || '');
             const [configured, setConfigured] = useState(false);
             const [syncing, setSyncing] = useState(false);
@@ -259,6 +320,13 @@
                             localStorage.setItem('feriadosPersonalizados', JSON.stringify(feriadosRemoto));
                             console.log('🎉 Feriados carregados:', feriadosRemoto.length);
                         }
+                    }
+                    
+                    // Carregar registos de produção do Excel
+                    const registosProducao = await carregarRegistosProducao();
+                    if (registosProducao && Object.keys(registosProducao).length > 0) {
+                        setRegistosProducaoRemoto(registosProducao);
+                        console.log('📊 Registos de produção carregados:', Object.keys(registosProducao).length);
                     }
                     
                     // Carregar dados locais existentes
@@ -1661,7 +1729,25 @@
 
             // Obter registos de um colaborador numa data
             const getRegistosColaboradorDia = (nome, data) => {
-                return registos.filter(r => r.colaborador === nome && r.data === data);
+                // Registos locais (pendentes)
+                const locais = registos.filter(r => r.colaborador === nome && r.data === data);
+                
+                // Registos remotos do Excel
+                const remotos = Object.values(registosProducaoRemoto).filter(r => {
+                    // Normalizar nome para comparação (pode ter diferenças de espaços/capitalização)
+                    const nomeRemoto = r.colaborador || '';
+                    const dataRemoto = r.data || '';
+                    // Converter data se vier em formato diferente (ex: 08/01/2026 vs 2026-01-08)
+                    let dataFormatada = dataRemoto;
+                    if (dataRemoto.includes('/')) {
+                        const [d, m, a] = dataRemoto.split('/');
+                        dataFormatada = `${a}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+                    }
+                    return nomeRemoto.toLowerCase().includes(nome.toLowerCase().split(' ')[0]) && dataFormatada === data;
+                });
+                
+                // Combinar, dando prioridade aos locais
+                return locais.length > 0 ? locais : remotos;
             };
 
             // Calcular horas trabalhadas
@@ -3885,7 +3971,3 @@
     </script>
 </body>
 </html>
-
-</body>
-</html>
-

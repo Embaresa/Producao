@@ -269,11 +269,13 @@
             const ausencias = {};
             config.ausencias.forEach((a, idx) => {
                 if (a.Nome && a.DataInicio) {
-                    const id = `${a.Nome}_${a.DataInicio}_${idx}`;
+                    const dataInicioConvertida = excelDateToJSDate(a.DataInicio);
+                    const dataFimConvertida = excelDateToJSDate(a.DataFim || a.DataInicio);
+                    const id = `${a.Nome}_${dataInicioConvertida}_${idx}`;
                     ausencias[id] = {
                         nome: a.Nome,
-                        dataInicio: a.DataInicio,
-                        dataFim: a.DataFim || a.DataInicio,
+                        dataInicio: dataInicioConvertida,
+                        dataFim: dataFimConvertida,
                         tipo: a.Tipo || 'ferias',
                         observacoes: a.Observacoes || ''
                     };
@@ -287,7 +289,7 @@
             return config.feriados
                 .filter(f => f.Data && f.Nome)
                 .map(f => ({
-                    data: f.Data,
+                    data: excelDateToJSDate(f.Data),
                     nome: f.Nome
                 }));
         };

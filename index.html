@@ -106,36 +106,36 @@
             return horarios;
         };
 
-   
+
         const processarAusencias = (config) => {
-    if (!config || !config.ausencias) return {};
-    const ausencias = {};
-    config.ausencias.forEach((a, idx) => {
-        if (a.Nome && a.DataInicio) {
-            const id = `${a.Nome}_${a.DataInicio}_${idx}`;
-            ausencias[id] = {
-                nome: a.Nome,
-                dataInicio: a.DataInicio,
-                dataFim: a.DataFim || a.DataInicio,
-                tipo: a.Tipo || 'ferias',
-                observacoes: a.Observacoes || ''
-            };
-        }
-    });
-    return ausencias;
-};
+            if (!config || !config.ausencias) return {};
+            const ausencias = {};
+            config.ausencias.forEach((a, idx) => {
+                if (a.Nome && a.DataInicio) {
+                    const id = `${a.Nome}_${a.DataInicio}_${idx}`;
+                    ausencias[id] = {
+                        nome: a.Nome,
+                        dataInicio: a.DataInicio,
+                        dataFim: a.DataFim || a.DataInicio,
+                        tipo: a.Tipo || 'ferias',
+                        observacoes: a.Observacoes || ''
+                    };
+                }
+            });
+            return ausencias;
+        };
 
-const processarFeriados = (config) => {
-    if (!config || !config.feriados) return [];
-    return config.feriados
-        .filter(f => f.Data && f.Nome)
-        .map(f => ({
-            data: f.Data,
-            nome: f.Nome
-        }));
-};
+        const processarFeriados = (config) => {
+            if (!config || !config.feriados) return [];
+            return config.feriados
+                .filter(f => f.Data && f.Nome)
+                .map(f => ({
+                    data: f.Data,
+                    nome: f.Nome
+                }));
+        };
 
-const App = () => {
+        const App = () => {
             const [view, setView] = useState('form'); // 'form', 'registos', 'perturbacao', 'operacao'
             const [registos, setRegistos] = useState([]);
             const [operadorNome, setOperadorNome] = useState(localStorage.getItem('operadorNome') || '');

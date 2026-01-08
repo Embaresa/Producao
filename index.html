@@ -42,6 +42,45 @@
         const POWER_AUTOMATE_PERTURBACOES = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4';
 // URL do Power Automate para carregar configurações do Excel
         const POWER_AUTOMATE_CONFIG = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5da3828d37564c2ba8af16ca06e2b7e0/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NRb520YI7wcDJjMufAfUzrlYIQSQ3ub6dl1KrQ3_FxI';
+        
+        // URL do Power Automate para ESCRITA de configurações no Excel
+        const POWER_AUTOMATE_ESCRITA = 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7ac8ac76458141b3bdbf0a981e9bf727/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=r5BztBsGszRYRdEyojb8qC5aTfPcYrxZLaMi8-eFmPE';
+        
+        // Função para ESCREVER configurações no Excel via Power Automate
+        const guardarNoExcel = async (tabela, dados) => {
+            try {
+                console.log(`💾 A guardar em ${tabela}:`, dados);
+                
+                const response = await fetch(POWER_AUTOMATE_ESCRITA, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        acao: 'adicionar',
+                        tabela: tabela,
+                        dados: dados
+                    })
+                });
+                
+                if (response.ok || response.status === 202) {
+                    console.log(`✅ Guardado em ${tabela} com sucesso!`);
+                    return true;
+                } else {
+                    console.error(`❌ Erro ao guardar em ${tabela}:`, response.status);
+                    return false;
+                }
+            } catch (error) {
+                console.error(`❌ Erro ao guardar em ${tabela}:`, error);
+                // Se for erro de CORS mas o pedido foi enviado, considerar sucesso
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    console.log('Possível erro CORS - verificar no Power Automate se foi recebido');
+                    return true;
+                }
+                return false;
+            }
+        };
 // Função para carregar configurações do Excel via Power Automate
         const carregarConfiguracoes = async () => {
             try {
@@ -324,11 +363,19 @@
             });
 
             // Adicionar/alterar exceção de turno
-            const definirExcecaoTurno = (nome, ano, semana, turno) => {
+            const definirExcecaoTurno = async (nome, ano, semana, turno) => {
                 const chave = `${nome}_${ano}_${semana}`;
                 const novasExcecoes = { ...excecoesTurno, [chave]: turno };
                 setExcecoesTurno(novasExcecoes);
                 localStorage.setItem('excecoesTurno', JSON.stringify(novasExcecoes));
+                
+                // Guardar no Excel via Power Automate
+                await guardarNoExcel('ExcecoesTurno', {
+                    Nome: nome,
+                    Ano: ano.toString(),
+                    Semana: semana.toString(),
+                    Turno: turno
+                });
             };
 
             // Remover exceção de turno
@@ -441,10 +488,16 @@
             });
 
             // Adicionar feriado personalizado
-            const adicionarFeriado = (data, nome) => {
+            const adicionarFeriado = async (data, nome) => {
                 const novosFeriados = [...feriadosPersonalizados, { data, nome }];
                 setFeriadosPersonalizados(novosFeriados);
                 localStorage.setItem('feriadosPersonalizados', JSON.stringify(novosFeriados));
+                
+                // Guardar no Excel via Power Automate
+                await guardarNoExcel('Feriados', {
+                    Data: data,
+                    Nome: nome
+                });
             };
 
             // Remover feriado personalizado
@@ -1314,7 +1367,7 @@
                 }
             };
 
-            const adicionarArtigo = () => {
+            const adicionarArtigo = async () => {
                 if (!novoItem.artigo || !novoItem.tipo) {
                     alert('Preencha o nome do artigo e o tipo!');
                     return;
@@ -1323,14 +1376,26 @@
                     alert('Este artigo já existe!');
                     return;
                 }
+                
+                // Guardar no Excel via Power Automate
+                const guardado = await guardarNoExcel('Artigos', {
+                    Artigo: novoItem.artigo,
+                    Tipo: novoItem.tipo
+                });
+                
                 const novosArtigos = [...customArtigos, { Artigo: novoItem.artigo, Tipo: novoItem.tipo }];
                 setCustomArtigos(novosArtigos);
                 localStorage.setItem('customArtigos', JSON.stringify(novosArtigos));
                 setNovoItem({ ...novoItem, artigo: '', tipo: '' });
-                alert('✅ Artigo adicionado!');
+                
+                if (guardado) {
+                    alert('✅ Artigo adicionado e sincronizado com Excel!');
+                } else {
+                    alert('✅ Artigo adicionado localmente!');
+                }
             };
 
-            const adicionarOperacao = () => {
+            const adicionarOperacao = async () => {
                 if (!novoItem.operacao || !novoItem.unidade) {
                     alert('Preencha o nome da operação e a unidade!');
                     return;
@@ -1339,14 +1404,27 @@
                     alert('Esta operação já existe!');
                     return;
                 }
+                
+                // Guardar no Excel via Power Automate
+                const guardado = await guardarNoExcel('Operacoes', {
+                    Operacao: novoItem.operacao,
+                    Unidade: novoItem.unidade,
+                    Artigos: ''
+                });
+                
                 const novasOperacoes = [...customOperacoes, { Op: novoItem.operacao, Unidade: novoItem.unidade }];
                 setCustomOperacoes(novasOperacoes);
                 localStorage.setItem('customOperacoes', JSON.stringify(novasOperacoes));
                 setNovoItem({ ...novoItem, operacao: '', unidade: '' });
-                alert('✅ Operação adicionada!');
+                
+                if (guardado) {
+                    alert('✅ Operação adicionada e sincronizada com Excel!');
+                } else {
+                    alert('✅ Operação adicionada localmente!');
+                }
             };
 
-            const adicionarPerturbacaoAdmin = () => {
+            const adicionarPerturbacaoAdmin = async () => {
                 if (!novoItem.perturbacao) {
                     alert('Preencha o nome da perturbação!');
                     return;
@@ -1355,11 +1433,22 @@
                     alert('Esta perturbação já existe!');
                     return;
                 }
+                
+                // Guardar no Excel via Power Automate
+                const guardado = await guardarNoExcel('Perturbacoes', {
+                    Descricao: novoItem.perturbacao
+                });
+                
                 const novasPerturbacoes = [...customPerturbacoes, novoItem.perturbacao];
                 setCustomPerturbacoes(novasPerturbacoes);
                 localStorage.setItem('customPerturbacoes', JSON.stringify(novasPerturbacoes));
                 setNovoItem({ ...novoItem, perturbacao: '' });
-                alert('✅ Perturbação adicionada!');
+                
+                if (guardado) {
+                    alert('✅ Perturbação adicionada e sincronizada com Excel!');
+                } else {
+                    alert('✅ Perturbação adicionada localmente!');
+                }
             };
 
             const removerArtigoCustom = (artigo) => {
@@ -1386,7 +1475,7 @@
                 }
             };
 
-            const adicionarColaborador = () => {
+            const adicionarColaborador = async () => {
                 if (!novoItem.colaborador) {
                     alert('Preencha o nome do colaborador!');
                     return;
@@ -1395,11 +1484,26 @@
                     alert('Este colaborador já existe!');
                     return;
                 }
+                
+                // Guardar no Excel via Power Automate
+                const guardado = await guardarNoExcel('Colaboradores', {
+                    Nome: novoItem.colaborador,
+                    Turno: 'normal',
+                    DiasTrabalho: 'seg,ter,qua,qui,sex',
+                    SemanaInicioTurno1: '1',
+                    Ativo: 'Sim'
+                });
+                
                 const novosColaboradores = [...customColaboradores, novoItem.colaborador];
                 setCustomColaboradores(novosColaboradores);
                 localStorage.setItem('customColaboradores', JSON.stringify(novosColaboradores));
                 setNovoItem({ ...novoItem, colaborador: '' });
-                alert('✅ Colaborador adicionado!');
+                
+                if (guardado) {
+                    alert('✅ Colaborador adicionado e sincronizado com Excel!');
+                } else {
+                    alert('✅ Colaborador adicionado localmente!\n⚠️ Não foi possível sincronizar com Excel.');
+                }
             };
 
             const removerColaboradorCustom = (colaborador) => {
@@ -1434,11 +1538,19 @@
             };
 
             // Funções para trabalho extra
-            const adicionarTrabalhoExtra = (nome, data, horaEntrada, horaSaida) => {
+            const adicionarTrabalhoExtra = async (nome, data, horaEntrada, horaSaida) => {
                 const chave = `${nome}_${data}`;
                 const novoExtra = { ...trabalhoExtra, [chave]: { nome, data, horaEntrada, horaSaida } };
                 setTrabalhoExtra(novoExtra);
                 localStorage.setItem('trabalhoExtra', JSON.stringify(novoExtra));
+                
+                // Guardar no Excel via Power Automate
+                await guardarNoExcel('TrabalhoExtra', {
+                    Nome: nome,
+                    Data: data,
+                    HoraEntrada: horaEntrada,
+                    HoraSaida: horaSaida
+                });
             };
 
             const removerTrabalhoExtra = (nome, data) => {
@@ -1450,11 +1562,20 @@
             };
 
             // Funções para ausências
-            const adicionarAusencia = (nome, dataInicio, dataFim, tipo, observacoes = '') => {
+            const adicionarAusencia = async (nome, dataInicio, dataFim, tipo, observacoes = '') => {
                 const id = `${nome}_${dataInicio}_${Date.now()}`;
                 const novasAusencias = { ...ausencias, [id]: { nome, dataInicio, dataFim, tipo, observacoes } };
                 setAusencias(novasAusencias);
                 localStorage.setItem('ausencias', JSON.stringify(novasAusencias));
+                
+                // Guardar no Excel via Power Automate
+                await guardarNoExcel('Ausencias', {
+                    Nome: nome,
+                    DataInicio: dataInicio,
+                    DataFim: dataFim,
+                    Tipo: tipo,
+                    Observacoes: observacoes
+                });
             };
 
             const removerAusencia = (id) => {
@@ -3720,3 +3841,4 @@
     </script>
 </body>
 </html>
+

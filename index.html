@@ -1754,12 +1754,22 @@
                 // Se há registos locais, usar esses
                 if (locais.length > 0) return locais;
                 
-                // Registos remotos do Excel - comparação flexível de nomes
+                // Registos remotos do Excel - usar estado ou localStorage
+                let registosRemoto = registosProducaoRemoto;
+                if (!registosRemoto || Object.keys(registosRemoto).length === 0) {
+                    try {
+                        registosRemoto = JSON.parse(localStorage.getItem('registosProducao') || '{}');
+                    } catch (e) {
+                        registosRemoto = {};
+                    }
+                }
+                
+                // Comparação flexível de nomes
                 const nomeParts = nome.toLowerCase().split(' ');
                 const primeiroNome = nomeParts[0];
                 const ultimoNome = nomeParts[nomeParts.length - 1];
                 
-                const remotos = Object.values(registosProducaoRemoto).filter(r => {
+                const remotos = Object.values(registosRemoto).filter(r => {
                     if (r.data !== data) return false;
                     const nomeRemoto = (r.colaborador || '').toLowerCase();
                     // Verificar se o nome remoto contém o primeiro E último nome

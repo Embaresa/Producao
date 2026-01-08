@@ -657,12 +657,21 @@
             };
 
             // Adicionar férias a múltiplos colaboradores
-            const adicionarFeriasEmMassa = (colaboradores, dataInicio, dataFim, observacoes = '') => {
+            const adicionarFeriasEmMassa = async (colaboradores, dataInicio, dataFim, observacoes = '') => {
                 let novasAusencias = { ...ausencias };
-                colaboradores.forEach(nome => {
+                for (const nome of colaboradores) {
                     const id = `${nome}_${dataInicio}_${Date.now()}_${Math.random()}`;
                     novasAusencias[id] = { nome, dataInicio, dataFim, tipo: 'ferias', observacoes };
-                });
+                    
+                    // Guardar cada ausência no Excel via Power Automate
+                    await guardarNoExcel('Ausencias', {
+                        Nome: nome,
+                        DataInicio: dataInicio,
+                        DataFim: dataFim,
+                        Tipo: 'ferias',
+                        Observacoes: observacoes
+                    });
+                }
                 setAusencias(novasAusencias);
                 localStorage.setItem('ausencias', JSON.stringify(novasAusencias));
             };
@@ -1846,10 +1855,17 @@
                     return { estado: 'pendente', cor: '#fbbf24' };
                 }
 
-                if (horasTrabalhadas >= horasEsperadas - 0.5) {
-                    return { estado: 'completo', cor: '#10b981', horas: horasTrabalhadas, turno: turnoEfetivo };
+                // Se há registos, considerar completo (verde)
+                // Se tiver horas registadas, verificar se são suficientes
+                if (horasTrabalhadas > 0) {
+                    if (horasTrabalhadas >= horasEsperadas - 0.5) {
+                        return { estado: 'completo', cor: '#10b981', horas: horasTrabalhadas, turno: turnoEfetivo };
+                    } else {
+                        return { estado: 'incompleto', cor: '#f59e0b', horas: horasTrabalhadas, turno: turnoEfetivo };
+                    }
                 } else {
-                    return { estado: 'incompleto', cor: '#f59e0b', horas: horasTrabalhadas, turno: turnoEfetivo };
+                    // Sem horas registadas mas com registos de produção = completo
+                    return { estado: 'completo', cor: '#10b981', turno: turnoEfetivo };
                 }
             };
 

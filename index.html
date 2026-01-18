@@ -1757,23 +1757,31 @@
                 return trabalhoExtra[chave];
             };
 
-            // Obter registos de um colaborador numa data
+   // Obter registos de um colaborador numa data - VERSÃO CORRIGIDA v2
             const getRegistosColaboradorDia = (nome, data) => {
                 // Registos locais (pendentes)
                 const locais = registos.filter(r => r.colaborador === nome && r.data === data);
                 
-                // Se há registos locais, usar esses
-                if (locais.length > 0) return locais;
+                // CORREÇÃO: Usar SEMPRE o estado React em vez de localStorage
+                // O localStorage está bloqueado pelo Tracking Prevention do browser
+                const registosRemotoArray = Object.values(registosProducaoRemoto || {});
                 
-                // Registos remotos do Excel - usar estado ou localStorage
-                let registosRemoto = registosProducaoRemoto;
-                if (!registosRemoto || Object.keys(registosRemoto).length === 0) {
-                    try {
-                        registosRemoto = JSON.parse(localStorage.getItem('registosProducao') || '{}');
-                    } catch (e) {
-                        registosRemoto = {};
-                    }
-                }
+                // Comparação flexível de nomes (primeiro nome + último nome)
+                const nomeParts = nome.toLowerCase().split(' ');
+                const primeiroNome = nomeParts[0];
+                const ultimoNome = nomeParts[nomeParts.length - 1];
+                
+                const remotos = registosRemotoArray.filter(r => {
+                    if (!r || !r.data) return false;
+                    if (r.data !== data) return false;
+                    
+                    const nomeRemoto = (r.colaborador || '').toLowerCase();
+                    return nomeRemoto.includes(primeiroNome) && nomeRemoto.includes(ultimoNome);
+                });
+                
+                // Combinar: locais têm prioridade sobre remotos
+                return locais.length > 0 ? locais : remotos;
+            };
                 
                 // Comparação flexível de nomes
                 const nomeParts = nome.toLowerCase().split(' ');

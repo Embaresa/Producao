@@ -1800,43 +1800,44 @@
             };
 
             // Obter estado do colaborador numa data
-            const getEstadoColaborador = (nome, data) => {
-                // Verificar se é feriado
+           const getEstadoColaborador = (nome, data) => {
                 const feriado = eFeriado(data);
                 if (feriado) return { estado: 'feriado', nome: feriado.nome, cor: '#ec4899' };
-
-                // Verificar ausência
                 const ausencia = temAusencia(nome, data);
                 if (ausencia) return { estado: 'ausencia', tipo: ausencia.tipo, cor: ausencia.tipo === 'ferias' ? '#3b82f6' : ausencia.tipo === 'baixa' ? '#8b5cf6' : ausencia.tipo === 'falta_just' ? '#f59e0b' : '#ef4444' };
-
                 const horario = horariosColaboradores[nome];
                 const extra = temTrabalhoExtra(nome, data);
                 const registosDia = getRegistosColaboradorDia(nome, data);
                 const horasTrabalhadas = calcularHorasTrabalhadas(registosDia);
                 const diaSemana = getDiaSemana(data);
                 const eFimDeSemana = diaSemana === 'sab' || diaSemana === 'dom';
-
-                // Fim de semana
+                
+                // CORREÇÃO: Mostrar registos de fim de semana automaticamente
                 if (eFimDeSemana) {
+                    // Se tem registos no fim de semana, mostrar como trabalho extra
+                    if (registosDia.length > 0) {
+                        return { estado: 'extra_ok', cor: '#10b981', horas: horasTrabalhadas };
+                    }
                     if (extra) {
-                        if (registosDia.length > 0) {
-                            return { estado: 'extra_ok', cor: '#10b981', horas: horasTrabalhadas };
-                        } else {
-                            return { estado: 'extra_falta', cor: '#ef4444' };
-                        }
+                        return { estado: 'extra_falta', cor: '#ef4444' };
                     }
                     return { estado: 'folga', cor: '#e5e7eb' };
                 }
-
-                // Dia normal
-                if (!horario || !horario.ativo) {
-                    return { estado: 'nao_configurado', cor: '#9ca3af' };
+                
+                if (!horario || !horario.ativo) return { estado: 'nao_configurado', cor: '#9ca3af' };
+                if (!horario.diasTrabalho.includes(diaSemana)) return { estado: 'folga', cor: '#e5e7eb' };
+                const turnoEfetivo = getTurnoEfetivo(nome, data);
+                const horasEsperadas = TURNOS[turnoEfetivo]?.horasTrabalho || 7.5;
+                if (registosDia.length === 0) {
+                    if (data < new Date().toISOString().split('T')[0]) return { estado: 'falta', cor: '#ef4444' };
+                    return { estado: 'pendente', cor: '#fbbf24' };
                 }
-
-                if (!horario.diasTrabalho.includes(diaSemana)) {
-                    return { estado: 'folga', cor: '#e5e7eb' };
+                if (horasTrabalhadas > 0) {
+                    if (horasTrabalhadas >= horasEsperadas - 0.5) return { estado: 'completo', cor: '#10b981', horas: horasTrabalhadas, turno: turnoEfetivo };
+                    return { estado: 'incompleto', cor: '#f59e0b', horas: horasTrabalhadas, turno: turnoEfetivo };
                 }
-
+                return { estado: 'completo', cor: '#10b981', turno: turnoEfetivo };
+            };
                 // Obter turno efetivo (considerando rotação)
                 const turnoEfetivo = getTurnoEfetivo(nome, data);
                 const horasEsperadas = TURNOS[turnoEfetivo]?.horasTrabalho || 7.5;

@@ -1838,32 +1838,7 @@
                 }
                 return { estado: 'completo', cor: '#10b981', turno: turnoEfetivo };
             };
-                // Obter turno efetivo (considerando rotação)
-                const turnoEfetivo = getTurnoEfetivo(nome, data);
-                const horasEsperadas = TURNOS[turnoEfetivo]?.horasTrabalho || 7.5;
-
-                if (registosDia.length === 0) {
-                    // Verificar se a data já passou
-                    if (data < new Date().toISOString().split('T')[0]) {
-                        return { estado: 'falta', cor: '#ef4444' };
-                    }
-                    return { estado: 'pendente', cor: '#fbbf24' };
-                }
-
-                // Se há registos, considerar completo (verde)
-                // Se tiver horas registadas, verificar se são suficientes
-                if (horasTrabalhadas > 0) {
-                    if (horasTrabalhadas >= horasEsperadas - 0.5) {
-                        return { estado: 'completo', cor: '#10b981', horas: horasTrabalhadas, turno: turnoEfetivo };
-                    } else {
-                        return { estado: 'incompleto', cor: '#f59e0b', horas: horasTrabalhadas, turno: turnoEfetivo };
-                    }
-                } else {
-                    // Sem horas registadas mas com registos de produção = completo
-                    return { estado: 'completo', cor: '#10b981', turno: turnoEfetivo };
-                }
-            };
-
+            
             // Gerar dias do mês
             const getDiasDoMes = (mesAno) => {
                 const [ano, mes] = mesAno.split('-').map(Number);

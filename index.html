@@ -1783,21 +1783,7 @@
                 return locais.length > 0 ? locais : remotos;
             };
                 
-                // Comparação flexível de nomes
-                const nomeParts = nome.toLowerCase().split(' ');
-                const primeiroNome = nomeParts[0];
-                const ultimoNome = nomeParts[nomeParts.length - 1];
-                
-                const remotos = Object.values(registosRemoto).filter(r => {
-                    if (r.data !== data) return false;
-                    const nomeRemoto = (r.colaborador || '').toLowerCase();
-                    // Verificar se o nome remoto contém o primeiro E último nome
-                    return nomeRemoto.includes(primeiroNome) && nomeRemoto.includes(ultimoNome);
-                });
-                
-                return remotos;
-            };
-
+   
             // Calcular horas trabalhadas
             const calcularHorasTrabalhadas = (registosDia) => {
                 let totalMinutos = 0;

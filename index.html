@@ -46,7 +46,7 @@
         const CONFIG = {
             URL_PRODUCAO: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7d6d064896034900976cdbe6fecbd809/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=o25Z-eFD68rkovgpItkF2MLL1wKINpkqRFsIZXBYWv8',
             URL_PERTURBACOES: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4',
-            URL_CONFIG: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/5da3828d37564c2ba8af16ca06e2b7e0/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=NRb520YI7wcDJjMufAfUzrlYIQSQ3ub6dl1KrQ3_FxI'
+            URL_CONFIG: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/464482ea19714e50b858771991c0539d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=H29XBCpPy1dyMk7Gyj6LAWy8RKI8Q4mpUFdI5qanNKU'
         };
 
         // ============================================================
@@ -74,7 +74,22 @@
             { artigo: "E2-Lower Esq V2", tipo: "E2" },
             { artigo: "E2-Upper Dir V2", tipo: "E2" },
             { artigo: "E2-Upper Esq V2", tipo: "E2" },
-            { artigo: "E2- Cx1 Desc 4Metros", tipo: "E2-Frac" },
+            { artigo: "KC 390-Lower Dir", tipo: "KC390" },
+            { artigo: "KC 390-Lower Esq", tipo: "KC390" },
+            { artigo: "KC 390-Upper Dir", tipo: "KC390" },
+            { artigo: "KC 390-Upper Esq", tipo: "KC390" },
+            { artigo: "KC 390-EV", tipo: "KC390" },
+            { artigo: "KC 390-EH", tipo: "KC390" },
+            { artigo: "Praetor-Semi Asa Dir", tipo: "Praetor" },
+            { artigo: "Praetor-Semi Asa Esq", tipo: "Praetor" },
+            { artigo: "Praetor-EH", tipo: "Praetor" },
+            { artigo: "Praetor-EV", tipo: "Praetor" },
+            { artigo: "Praetor-TC", tipo: "Praetor" },
+            { artigo: "Caixa para Ailerons", tipo: "Praetor" },
+            { artigo: "Caixa para Porta Carga", tipo: "Praetor" },
+            { artigo: "Caixa para Porta Rat", tipo: "Praetor" },
+            { artigo: "Caixa para Spoilers", tipo: "Praetor" },
+            { artigo: "E2-Cx1 Desc 4Metros", tipo: "E2-Frac" },
             { artigo: "E2-Frac 2", tipo: "E2-Frac" },
             { artigo: "E2-Frac 7", tipo: "E2-Frac" },
             { artigo: "E2-Frac 8", tipo: "E2-Frac" },
@@ -83,30 +98,19 @@
             { artigo: "E2-Frac 11", tipo: "E2-Frac" },
             { artigo: "E2-Frac 12", tipo: "E2-Frac" },
             { artigo: "E2-Frac 22", tipo: "E2-Frac" },
-            { artigo: "KC 390-Lower Dir", tipo: "KC390" },
-            { artigo: "KC 390-Lower Esq", tipo: "KC390" },
-            { artigo: "KC 390-Upper Dir", tipo: "KC390" },
-            { artigo: "KC 390-Upper Esq", tipo: "KC390" },
-            { artigo: "KC 390 EV", tipo: "KC390" },
-            { artigo: "KC390-EH", tipo: "KC390" },
-            { artigo: "KC 390 Frac 2", tipo: "KC390-Frac" },
-            { artigo: "KC 390 Frac 4", tipo: "KC390-Frac" },
-            { artigo: "KC 390 Frac 6", tipo: "KC390-Frac" },
-            { artigo: "KC 390 Frac 13", tipo: "KC390-Frac" },
-            { artigo: "KC 390 Wing tip", tipo: "KC390-Frac" },
-            { artigo: "Praetor- Semi Asa Dir", tipo: "Praetor" },
-            { artigo: "Praetor- Semi Asa Esq", tipo: "Praetor" },
-            { artigo: "Praetor EH", tipo: "Praetor" },
-            { artigo: "Praetor EV", tipo: "Praetor" },
-            { artigo: "Praetor TC", tipo: "Praetor" },
-            { artigo: "E1-Embalagem A", tipo: "E1" },
-            { artigo: "E1-Embalagem F", tipo: "E1" },
-            { artigo: "E1-Embalagem G", tipo: "E1" },
-            { artigo: "E1-Embalagem NMF", tipo: "E1" },
+            { artigo: "KC 390-Frac 2", tipo: "KC390-Frac" },
+            { artigo: "KC 390-Frac 4", tipo: "KC390-Frac" },
+            { artigo: "KC 390-Frac 6", tipo: "KC390-Frac" },
+            { artigo: "KC 390-Frac 13", tipo: "KC390-Frac" },
+            { artigo: "KC 390-Wing tip", tipo: "KC390-Frac" },
+            { artigo: "E1-Embalagem A", tipo: "E1-Frac" },
+            { artigo: "E1-Embalagem F", tipo: "E1-Frac" },
+            { artigo: "E1-Embalagem G", tipo: "E1-Frac" },
+            { artigo: "E1-Embalagem NMF", tipo: "E1-Frac" },
             { artigo: "Cxs sobras reforçadas", tipo: "Maquinacao" },
-            { artigo: "Cxs sobras tipo jaula 1600*1200*800", tipo: "Maquinacao" },
-            { artigo: "Cxs sobras tipo jaula 1600", tipo: "Maquinacao" },
             { artigo: "Cxs sobras tipo jaula 1200", tipo: "Maquinacao" },
+            { artigo: "Cxs sobras tipo jaula 1600", tipo: "Maquinacao" },
+            { artigo: "Cxs sobras tipo jaula 1600x1200x800", tipo: "Maquinacao" },
             { artigo: "Transporte", tipo: "Transporte" }
         ];
 
@@ -119,7 +123,7 @@
             { id: "KC390", nome: "KC390", icon: "✈️" },
             { id: "KC390-Frac", nome: "KC390 - Frações", icon: "📦" },
             { id: "Praetor", nome: "Praetor", icon: "✈️" },
-            { id: "E1", nome: "E1", icon: "📦" },
+            { id: "E1-Frac", nome: "E1 - Frações", icon: "📦" },
             { id: "Maquinacao", nome: "Maquinação", icon: "⚙️" },
             { id: "Transporte", nome: "Transportes", icon: "🚛" }
         ];
@@ -128,50 +132,45 @@
         // DADOS - Operações
         // ============================================================
         const OPERACOES = [
-            // E2 Upper/Lower
+            // E2
             { op: "E2- Soldadura Integral do bastidor", unidade: "Evora1-Soldadura", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
             { op: "E2- Colocação de fundo e patins", unidade: "Evora1-Montagem", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
             { op: "E2-Montagem e revestimento integral de suportes", unidade: "Evora1-Montagem", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
             { op: "E2-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
             { op: "E2-Montagem de suportes, topos, colocação de lona e armazenagem", unidade: "Evora1-Montagem", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
             { op: "E2- Embalamento", unidade: "Evora1-Embalamento", artigos: ["E2-Lower Dir V2", "E2-Lower Esq V2", "E2-Upper Dir V2", "E2-Upper Esq V2"] },
-            // KC390 Upper/Lower
+            // KC390
             { op: "KC390-Soldadura Integral bastidor", unidade: "Evora1-Soldadura", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
             { op: "KC390-Montagem caixa", unidade: "Evora1-Montagem", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
             { op: "KC390 asa-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
+            { op: "KC390-Fundo e Patins", unidade: "Evora1-Montagem", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
+            { op: "KC390-Revestimento e armazenagem", unidade: "Evora1-Montagem", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
             { op: "KC 390-Embalamento", unidade: "Evora1-Embalamento", artigos: ["KC 390-Lower Dir", "KC 390-Lower Esq", "KC 390-Upper Dir", "KC 390-Upper Esq"] },
-            // KC390 EV
-            { op: "KC390 EV-Montagem caixa", unidade: "Evora1-Montagem", artigos: ["KC 390 EV"] },
-            { op: "KC390 EV-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["KC 390 EV"] },
-            { op: "KC390 EV-Embalamento", unidade: "Evora1-Embalamento", artigos: ["KC 390 EV"] },
-            // KC390 EH
-            { op: "KC390 EH-Montagem caixa", unidade: "Evora1-Montagem", artigos: ["KC390-EH"] },
-            { op: "KC390 EH-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["KC390-EH"] },
-            { op: "KC390 EH-Embalamento", unidade: "Evora1-Embalamento", artigos: ["KC390-EH"] },
-            // Praetor Semi Asa
-            { op: "Praetor Semi asa- Soldadura Integral do bastidor", unidade: "Evora1-Soldadura", artigos: ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"] },
-            { op: "Praetor Semi asa-Montagem de suportes, topos, colocação de lona e armazenagem", unidade: "Evora1-Montagem", artigos: ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"] },
-            { op: "Praetor Semi asa-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"] },
-            { op: "Praetor Semi asa-Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor- Semi Asa Dir", "Praetor- Semi Asa Esq"] },
-            // Praetor EH/EV/TC
-            { op: "Praetor EH-Montagem", unidade: "Evora1-Montagem", artigos: ["Praetor EH"] },
-            { op: "Praetor EH-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor EH"] },
-            { op: "Praetor EH-Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor EH"] },
-            { op: "Praetor EV- Montagem caixa", unidade: "Evora1-Montagem", artigos: ["Praetor EV"] },
-            { op: "Praetor EV-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor EV"] },
-            { op: "Praetor EV- Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor EV"] },
-            { op: "Montagem caixa Tail cone", unidade: "Evora1-Montagem", artigos: ["Praetor TC"] },
-            { op: "Praetor TC-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor TC"] },
-            { op: "Embalamento Tail cone", unidade: "Evora1-Embalamento", artigos: ["Praetor TC"] },
-            // E2 Frações
-            { op: "E2-Frac-Preparação e Montagem", unidade: "Évora 2-Montagem", artigos: ["E2- Cx1 Desc 4Metros", "E2-Frac 2", "E2-Frac 7", "E2-Frac 8", "E2-Frac 9", "E2-Frac 10", "E2-Frac 11", "E2-Frac 12", "E2-Frac 22"] },
-            // KC390 Frações
-            { op: "KC390-Frac-Preparação e Montagem", unidade: "Évora 2-Montagem", artigos: ["KC 390 Frac 2", "KC 390 Frac 4", "KC 390 Frac 6", "KC 390 Frac 13", "KC 390 Wing tip"] },
-            // E1
+            { op: "KC390 EV-Montagem caixa", unidade: "Evora1-Montagem", artigos: ["KC 390-EV"] },
+            { op: "KC390 EV-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["KC 390-EV"] },
+            { op: "KC390 EV-Embalamento", unidade: "Evora1-Embalamento", artigos: ["KC 390-EV"] },
+            { op: "KC390 EH-Montagem caixa", unidade: "Evora1-Montagem", artigos: ["KC 390-EH"] },
+            { op: "KC390 EH-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["KC 390-EH"] },
+            { op: "KC390 EH-Embalamento", unidade: "Evora1-Embalamento", artigos: ["KC 390-EH"] },
+            // Praetor
+            { op: "Praetor Semi asa- Soldadura Integral do bastidor", unidade: "Evora1-Soldadura", artigos: ["Praetor-Semi Asa Dir", "Praetor-Semi Asa Esq"] },
+            { op: "Praetor Semi asa-Montagem de suportes, topos, colocação de lona e armazenagem", unidade: "Evora1-Montagem", artigos: ["Praetor-Semi Asa Dir", "Praetor-Semi Asa Esq"] },
+            { op: "Praetor Semi asa-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor-Semi Asa Dir", "Praetor-Semi Asa Esq"] },
+            { op: "Praetor Semi asa-Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor-Semi Asa Dir", "Praetor-Semi Asa Esq"] },
+            { op: "Praetor EH-Montagem", unidade: "Evora1-Montagem", artigos: ["Praetor-EH"] },
+            { op: "Praetor EH-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor-EH"] },
+            { op: "Praetor EH-Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor-EH"] },
+            { op: "Praetor EV- Montagem caixa", unidade: "Evora1-Montagem", artigos: ["Praetor-EV"] },
+            { op: "Praetor EV-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor-EV"] },
+            { op: "Praetor EV- Embalamento", unidade: "Evora1-Embalamento", artigos: ["Praetor-EV"] },
+            { op: "Montagem caixa Tail cone", unidade: "Evora1-Montagem", artigos: ["Praetor-TC"] },
+            { op: "Praetor TC-Preparação de Bolsa de alumínio", unidade: "Evora1-Montagem", artigos: ["Praetor-TC"] },
+            { op: "Embalamento Tail cone", unidade: "Evora1-Embalamento", artigos: ["Praetor-TC"] },
+            // Frações
+            { op: "E2-Frac-Preparação e Montagem", unidade: "Évora 2-Montagem", artigos: ["E2-Cx1 Desc 4Metros", "E2-Frac 2", "E2-Frac 7", "E2-Frac 8", "E2-Frac 9", "E2-Frac 10", "E2-Frac 11", "E2-Frac 12", "E2-Frac 22"] },
+            { op: "KC390-Frac-Preparação e Montagem", unidade: "Évora 2-Montagem", artigos: ["KC 390-Frac 2", "KC 390-Frac 4", "KC 390-Frac 6", "KC 390-Frac 13", "KC 390-Wing tip"] },
             { op: "E1-Preparação e Montagem", unidade: "Évora 2-Montagem", artigos: ["E1-Embalagem A", "E1-Embalagem F", "E1-Embalagem G", "E1-Embalagem NMF"] },
-            // Maquinação
-            { op: "Preparação e Montagem Cx sobras", unidade: "Évora 2-Montagem", artigos: ["Cxs sobras reforçadas", "Cxs sobras tipo jaula 1600*1200*800", "Cxs sobras tipo jaula 1600", "Cxs sobras tipo jaula 1200"] },
-            // Transporte
+            { op: "Preparação e Montagem Cx sobras", unidade: "Évora 2-Montagem", artigos: ["Cxs sobras reforçadas", "Cxs sobras tipo jaula 1600x1200x800", "Cxs sobras tipo jaula 1600", "Cxs sobras tipo jaula 1200"] },
             { op: "Carga e Transporte de caixas para ANN/EMBARESA2", unidade: "Transportes", artigos: ["Transporte"] }
         ];
 
@@ -180,33 +179,37 @@
         // ============================================================
         const PERTURBACOES = [
             "Atraso entrega de peça no cliente",
-            "Avaria pistola cravação",
+            "Avaria Maquina de soldar",
+            "Avaria Equipamentos",
             "Avaria/ Manutenção ponte rolante",
             "Descarga camião material",
+            "Falha electricidade",
             "Falha leitura do plano/ material errado",
             "Falta de Pessoal",
             "Falta material de embalagem",
-            "Limpeza",
+            "Formação / 1ªpeça/ Try outs",
+            "Formação on the Job",
+            "Formação/Reunião/ analise planeamento vs objectivos",
             "Limpeza camião",
             "Limpeza e preparação material para soldadura",
-            "Manutenção Programada",
+            "Limpeza/ Organização",
+            "Manutenção/ limpeza Programada",
             "Material de embalagem Fora de dimensões",
+            "Movimentação de material/ Produto acabado",
             "Movimentação residuos para destinatário reciclagem",
-            "Novos equipamentos /Formação / 1ªpeça/ Try outs",
             "Organização & Movimentação de material",
             "Preparação arranque/ fim e para cliente",
-            "Preparação de material",
-            "Preparação material para stock de semiacabados E2",
+            "Preparação material - soldadura",
             "Preparação material para stock de semiacabados Fracções",
+            "Preparação material para stock de semiacabados E2",
             "Problemas de esquadria - madeira torcida",
             "Produto não conforme",
             "Produto não conforme no cliente",
             "Produto para Semi-Acabado",
             "Reparação de lona rasgada",
             "Reparação produto não conforme para cliente",
-            "Reunião/ analise planeamento vs objectivos",
             "Separação de material para montagem",
-            "Tempo espera no cliente por falta Caixa / Peça/qualidade"
+            "Tempo espera no cliente-Recepçao /Caixa/ Peça/Qualidade"
         ];
 
         // ============================================================
@@ -285,14 +288,133 @@
                 data: dataAtual, tipo: '', horaInicio: '', horaFim: ''
             });
 
-            // Estados para configurações dinâmicas
+            // Estados para configurações dinâmicas (carregadas do Excel)
+            const [programasLista, setProgramasLista] = useState(TIPOS);
             const [artigosLista, setArtigosLista] = useState(ARTIGOS);
             const [operacoesLista, setOperacoesLista] = useState(OPERACOES);
+            const [perturbsLista, setPerturbsLista] = useState(PERTURBACOES);
             const [colaboradoresLista, setColaboradoresLista] = useState(COLABORADORES);
+            const [configLoaded, setConfigLoaded] = useState(false);
+            const [configError, setConfigError] = useState('');
+
+            // Carregar configurações do Excel via Power Automate
+            useEffect(() => {
+                const carregarConfigs = async () => {
+                    // Verificar cache local (válido por 1 hora)
+                    const cache = localStorage.getItem('configCache');
+                    const cacheTime = localStorage.getItem('configCacheTime');
+                    if (cache && cacheTime && (Date.now() - parseInt(cacheTime)) < 3600000) {
+                        try {
+                            const dados = JSON.parse(cache);
+                            aplicarConfigs(dados);
+                            setConfigLoaded(true);
+                            console.log('✅ Configs carregadas do cache');
+                            return;
+                        } catch(e) {}
+                    }
+
+                    // Buscar do Power Automate
+                    if (!CONFIG.URL_CONFIG || CONFIG.URL_CONFIG.includes('xxx')) {
+                        console.log('⚠️ URL_CONFIG não configurado, usando dados locais');
+                        setConfigLoaded(true);
+                        return;
+                    }
+
+                    try {
+                        const resp = await fetch(CONFIG.URL_CONFIG, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ acao: 'lerConfigs' })
+                        });
+                        
+                        if (resp.ok) {
+                            const dados = await resp.json();
+                            aplicarConfigs(dados);
+                            // Guardar em cache
+                            localStorage.setItem('configCache', JSON.stringify(dados));
+                            localStorage.setItem('configCacheTime', Date.now().toString());
+                            console.log('✅ Configs carregadas do Excel');
+                        }
+                    } catch(e) {
+                        console.log('⚠️ Erro ao carregar configs, usando dados locais:', e.message);
+                        setConfigError('Offline - usando dados locais');
+                    }
+                    setConfigLoaded(true);
+                };
+
+                const aplicarConfigs = (dados) => {
+                    // ConfigProgramas
+                    if (dados.programas && Array.isArray(dados.programas) && dados.programas.length > 0) {
+                        const progs = dados.programas.map(p => ({
+                            id: p.ID || p.id,
+                            nome: p.Nome || p.nome,
+                            icon: p.Icon || p.icon || '📦'
+                        })).filter(p => p.id);
+                        if (progs.length > 0) setProgramasLista(progs);
+                    }
+
+                    // ConfigArtigos
+                    if (dados.artigos && Array.isArray(dados.artigos) && dados.artigos.length > 0) {
+                        const arts = dados.artigos.map(a => ({
+                            artigo: a.Artigo || a.artigo,
+                            tipo: a.Programa || a.programa || a.Tipo || a.tipo
+                        })).filter(a => a.artigo);
+                        if (arts.length > 0) setArtigosLista(arts);
+                    }
+
+                    // ConfigOperacoes
+                    if (dados.operacoes && Array.isArray(dados.operacoes) && dados.operacoes.length > 0) {
+                        const ops = dados.operacoes.map(o => ({
+                            op: o.Operacao || o.op,
+                            unidade: o.Unidade || o.unidade || '',
+                            programa: o.Programa || o.programa || '',
+                            artigos: typeof (o.Artigos || o.artigos) === 'string' 
+                                ? (o.Artigos || o.artigos).split(',').map(a => a.trim()).filter(a => a)
+                                : (o.Artigos || o.artigos || [])
+                        })).filter(o => o.op);
+                        if (ops.length > 0) setOperacoesLista(ops);
+                    }
+
+                    // ConfigPerturbacoes
+                    if (dados.perturbacoes && Array.isArray(dados.perturbacoes) && dados.perturbacoes.length > 0) {
+                        const perts = dados.perturbacoes.map(p => p.Perturbacao || p.perturbacao || p.Descricao || p).filter(p => p && typeof p === 'string');
+                        if (perts.length > 0) setPerturbsLista(perts);
+                    }
+
+                    // ConfigColaboradores
+                    if (dados.colaboradores && Array.isArray(dados.colaboradores) && dados.colaboradores.length > 0) {
+                        const cols = dados.colaboradores
+                            .filter(c => (c.Ativo || c.ativo || '').toLowerCase() === 'sim')
+                            .map(c => c.Nome || c.nome)
+                            .filter(c => c);
+                        if (cols.length > 0) setColaboradoresLista(cols);
+                    }
+                };
+
+                carregarConfigs();
+            }, []);
+
+            // Forçar recarga das configs
+            const recarregarConfigs = () => {
+                localStorage.removeItem('configCache');
+                localStorage.removeItem('configCacheTime');
+                setConfigLoaded(false);
+                setConfigError('');
+                window.location.reload();
+            };
 
             // Persistência
             useEffect(() => { localStorage.setItem('registosProd', JSON.stringify(registos)); }, [registos]);
             useEffect(() => { localStorage.setItem('perturbacoesProd', JSON.stringify(perturbacoes)); }, [perturbacoes]);
+
+            // Tipos/Programas dinâmicos - usa programas do Excel, com fallback
+            const tiposDinamicos = useMemo(() => {
+                const tiposComArtigos = [...new Set(artigosLista.map(a => a.tipo))];
+                return tiposComArtigos.map(t => {
+                    const prog = programasLista.find(x => x.id === t);
+                    return prog || { id: t, nome: t, icon: '📦' };
+                });
+            }, [artigosLista, programasLista]);
 
             // Filtros
             const artigosFilt = useMemo(() => 
@@ -323,14 +445,14 @@
             const resumoPorTipo = useMemo(() => {
                 const r = {};
                 regsDia.forEach(reg => {
-                    const art = ARTIGOS.find(a => a.artigo === reg.artigo);
+                    const art = artigosLista.find(a => a.artigo === reg.artigo);
                     const t = art?.tipo || 'Outro';
                     if (!r[t]) r[t] = { ops: 0, min: 0 };
                     r[t].ops++;
                     r[t].min += calcMin(reg.horaInicio, reg.horaFim);
                 });
                 return r;
-            }, [regsDia]);
+            }, [regsDia, artigosLista]);
 
             // Login/Logout
             const login = () => {
@@ -358,7 +480,7 @@
                 setLoading(true);
                 const id = Date.now();
                 const dur = calcDuracao(registo.horaInicio, registo.horaFim);
-                const art = ARTIGOS.find(a => a.artigo === registo.artigo);
+                const art = artigosLista.find(a => a.artigo === registo.artigo);
 
                 const novo = {
                     id,
@@ -464,7 +586,7 @@
                                 <label className="label">👤 O seu nome</label>
                                 <select className="input" value={operador} onChange={e => setOperador(e.target.value)}>
                                     <option value="">Selecionar...</option>
-                                    {COLABORADORES.sort().map((c, i) => <option key={i} value={c}>{c}</option>)}
+                                    {colaboradoresLista.sort().map((c, i) => <option key={i} value={c}>{c}</option>)}
                                 </select>
                             </div>
                             <button className="btn btn-primary" style={{ width: '100%', padding: '16px', fontSize: '18px' }} onClick={login}>
@@ -497,7 +619,7 @@
                                     <label className="label">🏭 Programa</label>
                                     <select className="input" value={registo.tipo} onChange={e => setRegisto({ ...registo, tipo: e.target.value, artigo: '', operacao: '', unidade: '' })}>
                                         <option value="">Selecionar...</option>
-                                        {TIPOS.map(t => <option key={t.id} value={t.id}>{t.icon} {t.nome}</option>)}
+                                        {tiposDinamicos.map(t => <option key={t.id} value={t.id}>{t.icon} {t.nome}</option>)}
                                     </select>
                                 </div>
 
@@ -512,7 +634,7 @@
                                 <div className="mb-3">
                                     <label className="label">🔧 Operação</label>
                                     <select className="input" value={registo.operacao} onChange={e => {
-                                        const o = OPERACOES.find(x => x.op === e.target.value);
+                                        const o = operacoesLista.find(x => x.op === e.target.value);
                                         setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '' });
                                     }} disabled={!registo.artigo}>
                                         <option value="">{registo.artigo ? 'Selecionar...' : 'Selecione artigo primeiro'}</option>
@@ -600,7 +722,7 @@
                                     <label className="label">Tipo de Perturbação</label>
                                     <select className="input" value={pert.tipo} onChange={e => setPert({ ...pert, tipo: e.target.value })}>
                                         <option value="">Selecionar...</option>
-                                        {PERTURBACOES.map((p, i) => <option key={i} value={p}>{p}</option>)}
+                                        {perturbsLista.map((p, i) => <option key={i} value={p}>{p}</option>)}
                                     </select>
                                 </div>
 
@@ -695,7 +817,7 @@
                                 <div className="card">
                                     <h3 style={{ margin: '0 0 15px 0' }}>📦 Por Tipo de Caixa</h3>
                                     {Object.entries(resumoPorTipo).map(([tipo, d]) => {
-                                        const t = TIPOS.find(x => x.id === tipo);
+                                        const t = tiposDinamicos.find(x => x.id === tipo);
                                         return (
                                             <div key={tipo} style={{ background: '#f1f5f9', borderRadius: '10px', padding: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                 <div>
@@ -849,6 +971,17 @@
                         <button className="btn" style={{ width: '100%', background: 'transparent', color: '#64748b' }} onClick={logout}>
                             🔄 Alterar colaborador
                         </button>
+
+                        {/* Recarregar configurações */}
+                        <button className="btn" style={{ width: '100%', background: 'transparent', color: '#94a3b8', fontSize: '13px', marginTop: '10px' }} onClick={recarregarConfigs}>
+                            🔄 Atualizar configurações do Excel
+                        </button>
+
+                        {configError && (
+                            <div style={{ textAlign: 'center', fontSize: '12px', color: '#f59e0b', marginTop: '8px' }}>
+                                ⚠️ {configError}
+                            </div>
+                        )}
                     </div>
                 </div>
             );

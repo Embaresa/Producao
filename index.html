@@ -741,7 +741,7 @@
             // MODAL - DIA TERMINADO?
             // ============================================================
             const ModalDia = () => {
-                const [fase, setFase] = useState(1); // 1=dia terminado?, 2=o que fazer?
+                const [fase, setFase] = useState(1);
 
                 const terminarDia = () => {
                     setShowDiaModal(false);
@@ -753,10 +753,25 @@
                     setView('menu');
                 };
 
+                // Se o dia já está completo (>=450 min) só permite terminar
+                const diaCompleto = totais.total >= 450;
+
                 return (
                     <div className="modal-overlay">
                         <div className="modal-box">
-                            {fase === 1 ? (
+                            {diaCompleto ? (
+                                <>
+                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>✅</div>
+                                    <h2 style={{ color: '#059669' }}>Dia completo!</h2>
+                                    <p>
+                                        Registaste <strong>{Math.floor(totais.total/60)}h {totais.total%60}min</strong> hoje.<br/>
+                                        O dia de trabalho está concluído.
+                                    </p>
+                                    <button className="modal-btn modal-btn-yes" onClick={terminarDia}>
+                                        ✅ Terminar dia
+                                    </button>
+                                </>
+                            ) : fase === 1 ? (
                                 <>
                                     <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
                                     <h2>Registo guardado!</h2>
@@ -1208,8 +1223,19 @@
                             </div>
                         )}
 
+                        {/* Aviso dia completo */}
+                        {totais.total >= 450 && (
+                            <div style={{ background: '#dcfce7', border: '2px solid #059669', borderRadius: '12px', padding: '16px 20px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '28px' }}>🔒</span>
+                                <div>
+                                    <div style={{ fontWeight: '700', color: '#059669', fontSize: '15px' }}>Dia completo!</div>
+                                    <div style={{ fontSize: '13px', color: '#166534' }}>Não é possível registar mais para este dia.</div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Botão Operação */}
-                        <button className="btn btn-primary mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setView('operacao')}>
+                        <button className="btn btn-primary mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', opacity: totais.total >= 450 ? 0.4 : 1, cursor: totais.total >= 450 ? 'not-allowed' : 'pointer' }} onClick={() => totais.total < 450 && setView('operacao')}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                 <span style={{ fontSize: '30px' }}>📦</span>
                                 <div style={{ textAlign: 'left' }}>
@@ -1217,11 +1243,11 @@
                                     <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Artigo, operação, tempo</div>
                                 </div>
                             </div>
-                            <span>→</span>
+                            <span>{totais.total >= 450 ? '🔒' : '→'}</span>
                         </button>
 
                         {/* Botão Perturbação */}
-                        <button className="btn btn-danger mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setView('perturbacao')}>
+                        <button className="btn btn-danger mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', opacity: totais.total >= 450 ? 0.4 : 1, cursor: totais.total >= 450 ? 'not-allowed' : 'pointer' }} onClick={() => totais.total < 450 && setView('perturbacao')}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                 <span style={{ fontSize: '30px' }}>⚠️</span>
                                 <div style={{ textAlign: 'left' }}>
@@ -1229,7 +1255,7 @@
                                     <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Paragens, avarias, etc.</div>
                                 </div>
                             </div>
-                            <span>→</span>
+                            <span>{totais.total >= 450 ? '🔒' : '→'}</span>
                         </button>
 
                         {/* Botão Resumo */}

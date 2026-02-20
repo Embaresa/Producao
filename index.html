@@ -343,6 +343,19 @@
                 };
 
                 const aplicarConfigs = (dados) => {
+                    // Se o flow devolver um array plano, organizar por tipo de item
+                    if (Array.isArray(dados)) {
+                        const dadosOrganizados = {
+                            programas: dados.filter(i => i.ID && i.Nome && i.Icon),
+                            artigos: dados.filter(i => i.Artigo && i.Programa && !i.Operacao),
+                            operacoes: dados.filter(i => i.Operacao && i.Unidade && i.Artigos),
+                            perturbacoes: dados.filter(i => i.Perturbacao),
+                            colaboradores: dados.filter(i => i.Nome && i.Turno && i.Ativo)
+                        };
+                        aplicarConfigs(dadosOrganizados);
+                        return;
+                    }
+
                     // ConfigProgramas
                     if (dados.programas && Array.isArray(dados.programas) && dados.programas.length > 0) {
                         const progs = dados.programas.map(p => ({

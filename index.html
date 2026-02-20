@@ -33,6 +33,29 @@
         .mb-3 { margin-bottom: 15px; }
         .mb-4 { margin-bottom: 20px; }
         .mt-3 { margin-top: 15px; }
+
+        /* Modal dia terminado */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+            backdrop-filter: blur(4px); z-index: 999;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+            animation: fadeIn .2s ease;
+        }
+        .modal-box {
+            background: white; border-radius: 20px; padding: 32px 28px;
+            width: 100%; max-width: 380px; text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+            animation: slideUp .25s ease;
+        }
+        .modal-box h2 { font-size: 22px; color: #1e40af; margin: 0 0 8px 0; }
+        .modal-box p { color: #64748b; font-size: 14px; margin: 0 0 28px 0; line-height: 1.5; }
+        .modal-btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: all .2s; margin-bottom: 10px; }
+        .modal-btn:active { transform: scale(0.98); }
+        .modal-btn-yes { background: linear-gradient(135deg, #059669, #047857); color: white; }
+        .modal-btn-no { background: linear-gradient(135deg, #1e40af, #1e3a8a); color: white; }
+        .modal-btn-later { background: #f1f5f9; color: #64748b; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -50,21 +73,34 @@
         };
 
         // ============================================================
-        // DADOS - Colaboradores
+        // DADOS - Colaboradores (com ID para PIN)
         // ============================================================
-        const COLABORADORES = [
-            "Amílcar Manuel Monginho Barreto",
-            "André Avelino Tavares Rocha",
-            "David Alexandre Lopes Rocha",
-            "Fernando Garcia",
-            "Hugo José Ferreira da Silva",
-            "Joaquim Comenda",
-            "Nuno Rafael Pereira Franco",
-            "Pedro Miguel Serranito Familia",
-            "Rui Miguel Charrua Richáu",
-            "Valdir Tavares",
-            "William Chaves Inaba"
+        const COLABORADORES_LISTA = [
+            { id: 1,  nm: "Amílcar Manuel Monginho Barreto",  sh: "Amílcar Barreto" },
+            { id: 2,  nm: "André Avelino Tavares Rocha",      sh: "André Rocha" },
+            { id: 3,  nm: "David Alexandre Lopes Rocha",      sh: "David Rocha" },
+            { id: 4,  nm: "Fernando Garcia",                  sh: "Fernando Garcia" },
+            { id: 5,  nm: "Hugo José Ferreira da Silva",      sh: "Hugo Silva" },
+            { id: 6,  nm: "Joaquim Comenda",                  sh: "Joaquim Comenda" },
+            { id: 7,  nm: "Nuno Rafael Pereira Franco",       sh: "Nuno Franco" },
+            { id: 8,  nm: "Paulo Saramago",                   sh: "Paulo Saramago" },
+            { id: 9,  nm: "Pedro Miguel Serranito Familia",   sh: "Pedro Familia" },
+            { id: 10, nm: "Rui Miguel Charrua Richáu",        sh: "Rui Richáu" },
+            { id: 11, nm: "Valdir Tavares",                   sh: "Valdir Tavares" },
+            { id: 12, nm: "William Chaves Inaba",             sh: "William Inaba" },
         ];
+
+        // Compatibilidade com código existente (lista de nomes completos)
+        const COLABORADORES = COLABORADORES_LISTA.map(c => c.nm);
+
+        // ============================================================
+        // PINs - 4 dígitos por colaborador
+        // ============================================================
+        const DEFAULT_PINS = {
+            1: '9012', 2: '4444', 3: '6666', 4: '7777',
+            5: '1234', 6: '5678', 7: '1111', 8: '3333',
+            9: '8888', 10: '9999', 11: '5555', 12: '2222'
+        };
 
         // ============================================================
         // DADOS - Artigos por tipo
@@ -269,6 +305,14 @@
             const [loading, setLoading] = useState(false);
             const [dataAtual, setDataAtual] = useState(new Date().toISOString().split('T')[0]);
 
+            // Estados PIN
+            const [pins] = useState(() => JSON.parse(localStorage.getItem('prod_pins') || 'null') || {...DEFAULT_PINS});
+            const [selEmp, setSelEmp] = useState(null);
+            const [pinDigits, setPinDigits] = useState(['', '', '', '']);
+            const [pinError, setPinError] = useState(false);
+            const [showDiaModal, setShowDiaModal] = useState(false);
+            const [avisoRegistosAbertos, setAvisoRegistosAbertos] = useState(null); // {data, totalMin}
+
             const [registos, setRegistos] = useState(() => {
                 const s = localStorage.getItem('registosProd');
                 return s ? JSON.parse(s) : [];
@@ -467,17 +511,94 @@
                 return r;
             }, [regsDia, artigosLista]);
 
-            // Login/Logout
-            const login = () => {
-                if (!operador) { alert('Selecione o seu nome!'); return; }
-                localStorage.setItem('operadorProd', operador);
+            // Login/Logout com PIN
+            const pickEmp = (emp) => {
+                setSelEmp(emp);
+                setPinDigits(['', '', '', '']);
+                setPinError(false);
+                setTimeout(() => {
+                    const el = document.getElementById('pin0');
+                    if (el) el.focus();
+                }, 100);
+            };
+
+            const handlePinInput = (i, val, allDigits) => {
+                if (!/^\d?$/.test(val)) return;
+                const d = [...allDigits];
+                d[i] = val;
+                setPinDigits(d);
+                if (val && i < 3) {
+                    setTimeout(() => {
+                        const el = document.getElementById('pin' + (i + 1));
+                        if (el) el.focus();
+                    }, 10);
+                }
+                if (val && i === 3) {
+                    const fullPin = d.join('');
+                    if (fullPin.length === 4) doLoginPin(selEmp, fullPin);
+                }
+            };
+
+            const handlePinKeyDown = (i, e) => {
+                if (e.key === 'Backspace' && !pinDigits[i] && i > 0) {
+                    const el = document.getElementById('pin' + (i - 1));
+                    if (el) el.focus();
+                }
+            };
+
+            const doLoginPin = (emp, pin) => {
+                if (!emp || pin.length !== 4) return;
+                if (pins[emp.id] !== pin) {
+                    setPinError(true);
+                    setPinDigits(['', '', '', '']);
+                    setTimeout(() => {
+                        const el = document.getElementById('pin0');
+                        if (el) el.focus();
+                    }, 10);
+                    return;
+                }
+                // Verificar registos em aberto de dias anteriores
+                const hoje = new Date().toISOString().split('T')[0];
+                const regsGuardados = JSON.parse(localStorage.getItem('registosProd') || '[]');
+                const pertsGuardados = JSON.parse(localStorage.getItem('perturbacoesProd') || '[]');
+                // Agrupar por dia, apenas dias anteriores a hoje
+                const diasAnteriores = {};
+                [...regsGuardados, ...pertsGuardados]
+                    .filter(r => r.colaborador === emp.nm && r.data < hoje)
+                    .forEach(r => {
+                        if (!diasAnteriores[r.data]) diasAnteriores[r.data] = 0;
+                        const [hi, mi] = (r.horaInicio||'0:0').split(':').map(Number);
+                        const [hf, mf] = (r.horaFim||'0:0').split(':').map(Number);
+                        let m = (hf*60+mf)-(hi*60+mi);
+                        if (m < 0) m += 1440;
+                        diasAnteriores[r.data] += m;
+                    });
+                // Verificar se há algum dia com menos de 450 min (7h30)
+                const diasIncompletos = Object.entries(diasAnteriores)
+                    .filter(([d, min]) => min < 450)
+                    .sort((a, b) => b[0].localeCompare(a[0])); // mais recente primeiro
+                localStorage.setItem('operadorProd', emp.nm);
+                setOperador(emp.nm);
                 setLoggedIn(true);
+                setPinError(false);
+                if (diasIncompletos.length > 0) {
+                    const [dataInc, minInc] = diasIncompletos[0];
+                    setAvisoRegistosAbertos({ data: dataInc, totalMin: minInc });
+                }
+            };
+
+            const login = () => {
+                const fullPin = pinDigits.join('');
+                if (selEmp && fullPin.length === 4) doLoginPin(selEmp, fullPin);
             };
 
             const logout = () => {
                 localStorage.removeItem('operadorProd');
                 setOperador('');
                 setLoggedIn(false);
+                setSelEmp(null);
+                setPinDigits(['', '', '', '']);
+                setPinError(false);
                 setView('menu');
             };
 
@@ -537,7 +658,7 @@
                 });
 
                 setLoading(false);
-                alert('✅ Operação registada!');
+                setShowDiaModal(true);
             };
 
             // Adicionar perturbação
@@ -579,32 +700,161 @@
 
                 setPert({ ...pert, tipo: '', horaInicio: pert.horaFim, horaFim: '' });
                 setLoading(false);
-                setView('menu');
-                alert('✅ Perturbação registada!');
+                setShowDiaModal(true);
             };
 
             // ============================================================
-            // ECRÃ LOGIN
+            // MODAL - AVISO REGISTOS EM ABERTO
+            // ============================================================
+            const ModalAvisoAberto = () => {
+                if (!avisoRegistosAbertos) return null;
+                const { data, totalMin } = avisoRegistosAbertos;
+                const [d, m, a] = data.split('-').reverse();
+                const dataFmt = d + '/' + m + '/' + a;
+                const h = Math.floor(totalMin / 60);
+                const min = totalMin % 60;
+                const hoje = new Date().toISOString().split('T')[0];
+                const dataFmtHoje = hoje.split('-').reverse().join('/');
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-box">
+                            <div style={{ fontSize: '52px', marginBottom: '12px' }}>⚠️</div>
+                            <h2 style={{ color: '#d97706' }}>Registos em aberto</h2>
+                            <p>
+                                No dia <strong>{dataFmt}</strong> ficaram registos por completar.<br/>
+                                Total registado: <strong>{h}h {min}min</strong> (mín. 7h30)<br/><br/>
+                                Tens de completar os registos antes de avançar.
+                            </p>
+                            <button className="modal-btn" style={{ background: 'linear-gradient(135deg, #d97706, #b45309)', color: 'white' }}
+                                onClick={() => {
+                                    setDataAtual(data);
+                                    setAvisoRegistosAbertos(null);
+                                }}>
+                                📝 Completar registos de {dataFmt}
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            // ============================================================
+            // MODAL - DIA TERMINADO?
+            // ============================================================
+            const ModalDia = () => {
+                const [fase, setFase] = useState(1); // 1=dia terminado?, 2=o que fazer?
+
+                const terminarDia = () => {
+                    setShowDiaModal(false);
+                    logout();
+                };
+
+                const continuarRegisto = () => {
+                    setShowDiaModal(false);
+                    setView('menu');
+                };
+
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-box">
+                            {fase === 1 ? (
+                                <>
+                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
+                                    <h2>Registo guardado!</h2>
+                                    <p>O dia de trabalho está terminado?</p>
+                                    <button className="modal-btn modal-btn-yes" onClick={terminarDia}>
+                                        ✅ Sim, dia terminado
+                                    </button>
+                                    <button className="modal-btn modal-btn-no" onClick={() => setFase(2)}>
+                                        ➕ Não, tenho mais para registar
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>📋</div>
+                                    <h2>O que pretendes fazer?</h2>
+                                    <p>Continua a registar ou deixa para mais tarde.</p>
+                                    <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
+                                        📦 Continuar a registar
+                                    </button>
+                                    <button className="modal-btn modal-btn-later" onClick={terminarDia}>
+                                        🕐 Terminar mais tarde
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            // ============================================================
+            // ECRÃ LOGIN COM PIN
             // ============================================================
             if (!loggedIn) {
+                const pinStyle = (i) => ({
+                    width: '56px', height: '64px', textAlign: 'center', fontSize: '28px',
+                    fontWeight: '700', border: '2px solid ' + (pinError ? '#dc2626' : '#e2e8f0'),
+                    borderRadius: '12px', outline: 'none', background: pinError ? '#fef2f2' : '#f8fafc',
+                    color: '#1e40af', transition: 'all .2s'
+                });
                 return (
                     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-                        <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
+                        <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '28px' }}>
                             <div className="text-center mb-4">
-                                <div style={{ fontSize: '60px', marginBottom: '10px' }}>🏭</div>
-                                <h1 style={{ fontSize: '24px', color: '#1e40af', margin: '0 0 5px 0' }}>Registo de Produção</h1>
-                                <p style={{ color: '#64748b', margin: 0 }}>Embaresa PT - Évora</p>
+                                <div style={{ fontSize: '56px', marginBottom: '10px' }}>🏭</div>
+                                <h1 style={{ fontSize: '22px', color: '#1e40af', margin: '0 0 4px 0' }}>Registo de Produção</h1>
+                                <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Embaresa PT — Évora</p>
                             </div>
-                            <div className="mb-4">
-                                <label className="label">👤 O seu nome</label>
-                                <select className="input" value={operador} onChange={e => setOperador(e.target.value)}>
-                                    <option value="">Selecionar...</option>
-                                    {colaboradoresLista.sort().map((c, i) => <option key={i} value={c}>{c}</option>)}
-                                </select>
+
+                            {/* Lista de colaboradores */}
+                            <div style={{ marginBottom: '16px' }}>
+                                <label className="label">👤 Selecionar colaborador</label>
+                                <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {COLABORADORES_LISTA.map(emp => (
+                                        <div key={emp.id}
+                                            onClick={() => pickEmp(emp)}
+                                            style={{
+                                                padding: '12px 16px', border: '2px solid ' + (selEmp?.id === emp.id ? '#1e40af' : '#e2e8f0'),
+                                                borderRadius: '10px', cursor: 'pointer', background: selEmp?.id === emp.id ? '#eff6ff' : '#f8fafc',
+                                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                transition: 'all .15s', fontSize: '14px', fontWeight: selEmp?.id === emp.id ? '600' : '400'
+                                            }}>
+                                            <span>{emp.sh}</span>
+                                            {selEmp?.id === emp.id && <span style={{ color: '#1e40af' }}>✓</span>}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                            <button className="btn btn-primary" style={{ width: '100%', padding: '16px', fontSize: '18px' }} onClick={login}>
-                                Entrar ➔
-                            </button>
+
+                            {/* Entrada de PIN */}
+                            {selEmp && (
+                                <div>
+                                    <label className="label" style={{ textAlign: 'center', display: 'block', marginBottom: '12px' }}>
+                                        🔑 PIN de {selEmp.sh.split(' ')[0]}
+                                    </label>
+                                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginBottom: '12px' }}>
+                                        {[0,1,2,3].map(i => (
+                                            <input
+                                                key={i}
+                                                id={'pin' + i}
+                                                type="tel"
+                                                maxLength={1}
+                                                value={pinDigits[i]}
+                                                onChange={e => handlePinInput(i, e.target.value, pinDigits)}
+                                                onKeyDown={e => handlePinKeyDown(i, e)}
+                                                style={pinStyle(i)}
+                                            />
+                                        ))}
+                                    </div>
+                                    {pinError && (
+                                        <div style={{ textAlign: 'center', color: '#dc2626', fontSize: '13px', marginBottom: '12px' }}>
+                                            ❌ PIN incorreto. Tenta novamente.
+                                        </div>
+                                    )}
+                                    <button className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '16px' }} onClick={login}>
+                                        Entrar ➔
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
@@ -616,6 +866,8 @@
             if (view === 'operacao') {
                 return (
                     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+                        {avisoRegistosAbertos && <ModalAvisoAberto />}
+                        {showDiaModal && <ModalDia />}
                         <div style={{ background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                             <button className="btn btn-secondary" style={{ marginBottom: '15px' }} onClick={() => setView('menu')}>← Voltar</button>
                             <h1 style={{ margin: 0, fontSize: '22px' }}>📦 Registar Operação</h1>
@@ -719,6 +971,7 @@
             if (view === 'perturbacao') {
                 return (
                     <div style={{ minHeight: '100vh', background: '#fef2f2' }}>
+                        {showDiaModal && <ModalDia />}
                         <div style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.2)', marginBottom: '15px' }} onClick={() => setView('menu')}>← Voltar</button>
                             <h1 style={{ margin: 0, fontSize: '22px' }}>⚠️ Registar Perturbação</h1>
@@ -890,6 +1143,10 @@
             // ============================================================
             return (
                 <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+                    {/* Modal aviso registos abertos */}
+                    {avisoRegistosAbertos && <ModalAvisoAberto />}
+                    {/* Modal dia terminado */}
+                    {showDiaModal && <ModalDia />}
                     {/* Header */}
                     <div style={{ background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

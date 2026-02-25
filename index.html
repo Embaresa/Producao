@@ -745,8 +745,6 @@
                 const [fase, setFase] = useState(1);
 
                 const terminarDia = () => {
-                    // Marcar dia como bloqueado
-                    localStorage.setItem('diaBloqueado_' + operador + '_' + dataAtual, '1');
                     setShowDiaModal(false);
                     logout();
                 };
@@ -756,27 +754,10 @@
                     setView('menu');
                 };
 
-                const atingiu8h = totais.total >= 480 && !eFimDeSemana(dataAtual);
-
                 return (
                     <div className="modal-overlay">
                         <div className="modal-box">
-                            {atingiu8h && fase === 1 ? (
-                                <>
-                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>⏰</div>
-                                    <h2 style={{ color: '#1e40af' }}>8 horas atingidas!</h2>
-                                    <p>
-                                        Registaste <strong>{Math.floor(totais.total/60)}h {totais.total%60}min</strong> hoje.<br/>
-                                        Queres encerrar o dia ou registar horas extra?
-                                    </p>
-                                    <button className="modal-btn modal-btn-yes" onClick={terminarDia}>
-                                        🔒 Encerrar dia
-                                    </button>
-                                    <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
-                                        ➕ Registar horas extra
-                                    </button>
-                                </>
-                            ) : fase === 1 ? (
+                            {fase === 1 ? (
                                 <>
                                     <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
                                     <h2>Registo guardado!</h2>
@@ -1230,50 +1211,29 @@
                             </div>
                         )}
 
-                        {/* Aviso dia bloqueado (fechou sem horas extra) */}
-                        {localStorage.getItem('diaBloqueado_' + operador + '_' + dataAtual) === '1' && (
-                            <div style={{ background: '#dcfce7', border: '2px solid #059669', borderRadius: '12px', padding: '16px 20px', marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '28px' }}>🔒</span>
-                                <div>
-                                    <div style={{ fontWeight: '700', color: '#059669', fontSize: '15px' }}>Dia encerrado!</div>
-                                    <div style={{ fontSize: '13px', color: '#166534' }}>Este dia foi encerrado. Não é possível registar mais.</div>
+                        {/* Botão Operação */}
+                        <button className="btn btn-primary mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setView('operacao')}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <span style={{ fontSize: '30px' }}>📦</span>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div>Registar Operação</div>
+                                    <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Artigo, operação, tempo</div>
                                 </div>
                             </div>
-                        )}
-
-                        {/* Botão Operação */}
-                        {(() => {
-                            const bloqueado = localStorage.getItem('diaBloqueado_' + operador + '_' + dataAtual) === '1';
-                            return (
-                                <button className="btn btn-primary mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', opacity: bloqueado ? 0.4 : 1, cursor: bloqueado ? 'not-allowed' : 'pointer' }} onClick={() => !bloqueado && setView('operacao')}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                        <span style={{ fontSize: '30px' }}>📦</span>
-                                        <div style={{ textAlign: 'left' }}>
-                                            <div>Registar Operação</div>
-                                            <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Artigo, operação, tempo</div>
-                                        </div>
-                                    </div>
-                                    <span>{bloqueado ? '🔒' : '→'}</span>
-                                </button>
-                            );
-                        })()}
+                            <span>→</span>
+                        </button>
 
                         {/* Botão Perturbação */}
-                        {(() => {
-                            const bloqueado = localStorage.getItem('diaBloqueado_' + operador + '_' + dataAtual) === '1';
-                            return (
-                                <button className="btn btn-danger mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', opacity: bloqueado ? 0.4 : 1, cursor: bloqueado ? 'not-allowed' : 'pointer' }} onClick={() => !bloqueado && setView('perturbacao')}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                        <span style={{ fontSize: '30px' }}>⚠️</span>
-                                        <div style={{ textAlign: 'left' }}>
-                                            <div>Registar Perturbação</div>
-                                            <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Paragens, avarias, etc.</div>
-                                        </div>
-                                    </div>
-                                    <span>{bloqueado ? '🔒' : '→'}</span>
-                                </button>
-                            );
-                        })()}
+                        <button className="btn btn-danger mb-3" style={{ width: '100%', padding: '20px', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }} onClick={() => setView('perturbacao')}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <span style={{ fontSize: '30px' }}>⚠️</span>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div>Registar Perturbação</div>
+                                    <div style={{ fontSize: '12px', opacity: 0.8, fontWeight: '400' }}>Paragens, avarias, etc.</div>
+                                </div>
+                            </div>
+                            <span>→</span>
+                        </button>
 
                         {/* Botão Resumo */}
                         <button className="btn btn-secondary mb-4" style={{ width: '100%', padding: '16px' }} onClick={() => setView('resumo')}>

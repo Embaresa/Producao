@@ -275,6 +275,7 @@
 
         const formatData = d => d ? d.split('-').reverse().join('/') : '';
         const eFeriado = d => FERIADOS.includes(d.slice(5));
+        const eFimDeSemana = d => { const dia = new Date(d + 'T12:00:00').getDay(); return dia === 0 || dia === 6; };
 
         const enviarPowerAutomate = async (url, dados) => {
             if (!url || url.includes('xxx')) {
@@ -573,9 +574,9 @@
                         if (m < 0) m += 1440;
                         diasAnteriores[r.data] += m;
                     });
-                // Verificar se há algum dia com menos de 450 min (7h30)
+                // Verificar se há algum dia com menos de 450 min (7h30) — excluir fins de semana
                 const diasIncompletos = Object.entries(diasAnteriores)
-                    .filter(([d, min]) => min < 450)
+                    .filter(([d, min]) => min < 450 && !eFimDeSemana(d))
                     .sort((a, b) => b[0].localeCompare(a[0])); // mais recente primeiro
                 localStorage.setItem('operadorProd', emp.nm);
                 setOperador(emp.nm);
@@ -755,7 +756,7 @@
                     setView('menu');
                 };
 
-                const atingiu8h = totais.total >= 480;
+                const atingiu8h = totais.total >= 480 && !eFimDeSemana(dataAtual);
 
                 return (
                     <div className="modal-overlay">
@@ -1216,11 +1217,13 @@
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                     <span style={{ fontSize: '24px' }}>{totais.total >= 450 ? '✅' : '⏰'}</span>
                                     <div>
-                                        <div style={{ fontWeight: '700', color: totais.total >= 450 ? '#059669' : totais.total >= 360 ? '#92400e' : '#dc2626' }}>
-                                            {totais.total >= 450 ? 'Dia completo!' : 'Faltam ' + Math.floor((480 - totais.total) / 60) + 'h ' + ((480 - totais.total) % 60) + 'min'}
+                                        <div style={{ fontWeight: '700', color: totais.total >= (eFimDeSemana(dataAtual) ? 1 : 450) ? '#059669' : totais.total >= 360 ? '#92400e' : '#dc2626' }}>
+                                            {eFimDeSemana(dataAtual)
+                                                ? (totais.total > 0 ? 'Horário livre ✓' : '')
+                                                : (totais.total >= 450 ? 'Dia completo!' : 'Faltam ' + Math.floor((480 - totais.total) / 60) + 'h ' + ((480 - totais.total) % 60) + 'min')}
                                         </div>
                                         <div style={{ fontSize: '12px', color: '#64748b' }}>
-                                            Total: {Math.floor(totais.total / 60)}h {totais.total % 60}min / 8h
+                                            Total: {Math.floor(totais.total / 60)}h {totais.total % 60}min{eFimDeSemana(dataAtual) ? ' (fim de semana)' : ' / 8h'}
                                         </div>
                                     </div>
                                 </div>

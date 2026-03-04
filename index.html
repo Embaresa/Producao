@@ -313,6 +313,8 @@
             const [pinError, setPinError] = useState(false);
             const [showDiaModal, setShowDiaModal] = useState(false);
             const [avisoRegistosAbertos, setAvisoRegistosAbertos] = useState(null); // {data, totalMin}
+            const [sincronizando, setSincronizando] = useState(false);
+            const [ultimaSync, setUltimaSync] = useState(null);
 
             const [registos, setRegistos] = useState(() => {
                 const s = localStorage.getItem('registosProd');
@@ -464,6 +466,66 @@
             // Persistência
             useEffect(() => { localStorage.setItem('registosProd', JSON.stringify(registos)); }, [registos]);
             useEffect(() => { localStorage.setItem('perturbacoesProd', JSON.stringify(perturbacoes)); }, [perturbacoes]);
+
+            // Contagem de pendentes
+            const pendentesCount = useMemo(() => {
+                const r = registos.filter(x => !x.synced).length;
+                const p = perturbacoes.filter(x => !x.synced).length;
+                return r + p;
+            }, [registos, perturbacoes]);
+
+            // Reenvio automático ao fazer login e manual
+            const reenviarPendentes = async (silencioso = false) => {
+                const regPend = registos.filter(x => !x.synced);
+                const pertPend = perturbacoes.filter(x => !x.synced);
+                if (regPend.length === 0 && pertPend.length === 0) {
+                    if (!silencioso) alert('✅ Não há registos por sincronizar!');
+                    return;
+                }
+                setSincronizando(true);
+                let sucesso = 0, falha = 0;
+                // Reenviar operações
+                const novosRegs = [...registos];
+                for (const r of regPend) {
+                    const ok = await enviarPowerAutomate(CONFIG.URL_PRODUCAO, {
+                        ID: r.id.toString(), Data: r.data, Artigo: r.artigo,
+                        TipoCaixa: r.tipoCaixa || '', Operacao: r.operacao,
+                        UnidadeProducao: r.unidade, Colaborador: r.colaborador,
+                        HoraInicio: r.horaInicio, HoraFim: r.horaFim,
+                        Duracao: r.duracao, Comentarios: r.comentarios || '',
+                        DataHoraRegisto: r.dataHora
+                    });
+                    const idx = novosRegs.findIndex(x => x.id === r.id);
+                    if (ok) { novosRegs[idx] = { ...novosRegs[idx], synced: true }; sucesso++; }
+                    else falha++;
+                }
+                setRegistos(novosRegs);
+                // Reenviar perturbações
+                const novasPerts = [...perturbacoes];
+                for (const p of pertPend) {
+                    const ok = await enviarPowerAutomate(CONFIG.URL_PERTURBACOES, {
+                        IDRegisto: p.id.toString(), Data: p.data, Colaborador: p.colaborador,
+                        TipoPerturbacao: p.tipo, HoraInicio: p.horaInicio,
+                        HoraFim: p.horaFim, Duracao: p.duracao,
+                        DataHoraRegisto: p.dataHora
+                    });
+                    const idx = novasPerts.findIndex(x => x.id === p.id);
+                    if (ok) { novasPerts[idx] = { ...novasPerts[idx], synced: true }; sucesso++; }
+                    else falha++;
+                }
+                setPerturbacoes(novasPerts);
+                setSincronizando(false);
+                setUltimaSync(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }));
+                if (!silencioso) {
+                    if (falha === 0) alert('✅ ' + sucesso + ' registo(s) sincronizado(s) com sucesso!');
+                    else alert('⚠️ ' + sucesso + ' sincronizado(s), ' + falha + ' falharam. Tenta novamente mais tarde.');
+                }
+            };
+
+            // Reenvio automático ao fazer login
+            useEffect(() => {
+                if (loggedIn) reenviarPendentes(true);
+            }, [loggedIn]);
 
             // Tipos/Programas dinâmicos - usa programas do Excel, com fallback
             const tiposDinamicos = useMemo(() => {
@@ -1244,6 +1306,31 @@
                         <button className="btn" style={{ width: '100%', background: 'transparent', color: '#64748b' }} onClick={logout}>
                             🔄 Alterar colaborador
                         </button>
+
+                        {/* Indicador de pendentes */}
+                        {pendentesCount > 0 && (
+                            <div style={{ background: '#fef3c7', border: '2px solid #f59e0b', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '22px' }}>⚠️</span>
+                                    <div>
+                                        <div style={{ fontWeight: '700', color: '#92400e', fontSize: '14px' }}>
+                                            {pendentesCount} registo{pendentesCount > 1 ? 's' : ''} por sincronizar
+                                        </div>
+                                        <div style={{ fontSize: '12px', color: '#b45309' }}>Não chegaram ao Excel</div>
+                                    </div>
+                                </div>
+                                <button className="btn" style={{ background: '#f59e0b', color: 'white', padding: '8px 14px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                                    onClick={() => reenviarPendentes(false)} disabled={sincronizando}>
+                                    {sincronizando ? '⏳' : '📤 Reenviar'}
+                                </button>
+                            </div>
+                        )}
+
+                        {ultimaSync && pendentesCount === 0 && (
+                            <div style={{ textAlign: 'center', fontSize: '12px', color: '#059669', marginBottom: '10px' }}>
+                                ✅ Tudo sincronizado ({ultimaSync})
+                            </div>
+                        )}
 
                         {/* Recarregar configurações */}
                         <button className="btn" style={{ width: '100%', background: 'transparent', color: '#94a3b8', fontSize: '13px', marginTop: '10px' }} onClick={recarregarConfigs}>

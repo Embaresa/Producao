@@ -636,9 +636,9 @@
                         if (m < 0) m += 1440;
                         diasAnteriores[r.data] += m;
                     });
-                // Verificar se há algum dia com menos de 450 min (7h30) — excluir fins de semana
+                // Verificar se há algum dia com menos de 450 min (7h30) — excluir fins de semana e dias encerrados
                 const diasIncompletos = Object.entries(diasAnteriores)
-                    .filter(([d, min]) => min < 450 && !eFimDeSemana(d))
+                    .filter(([d, min]) => min < 450 && !eFimDeSemana(d) && localStorage.getItem('diaEncerrado_' + emp.nm + '_' + d) !== '1')
                     .sort((a, b) => b[0].localeCompare(a[0])); // mais recente primeiro
                 localStorage.setItem('operadorProd', emp.nm);
                 setOperador(emp.nm);
@@ -806,7 +806,14 @@
             const ModalDia = () => {
                 const [fase, setFase] = useState(1);
 
-                const terminarDia = () => {
+                const encerrarDia = () => {
+                    localStorage.setItem('diaEncerrado_' + operador + '_' + dataAtual, '1');
+                    setShowDiaModal(false);
+                    logout();
+                };
+
+                const saiMaisCedo = () => {
+                    localStorage.setItem('diaEncerrado_' + operador + '_' + dataAtual, '1');
                     setShowDiaModal(false);
                     logout();
                 };
@@ -814,6 +821,12 @@
                 const continuarRegisto = () => {
                     setShowDiaModal(false);
                     setView('menu');
+                };
+
+                const terminarMaisTarde = () => {
+                    // Não marca como encerrado — pode ser avisado amanhã
+                    setShowDiaModal(false);
+                    logout();
                 };
 
                 return (
@@ -824,11 +837,23 @@
                                     <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
                                     <h2>Registo guardado!</h2>
                                     <p>O dia de trabalho está terminado?</p>
-                                    <button className="modal-btn modal-btn-yes" onClick={terminarDia}>
-                                        ✅ Sim, encerrar dia
+                                    <button className="modal-btn modal-btn-yes" onClick={() => setFase(2)}>
+                                        ✅ Sim, o dia terminou
                                     </button>
-                                    <button className="modal-btn modal-btn-no" onClick={() => setFase(2)}>
+                                    <button className="modal-btn modal-btn-no" onClick={() => setFase(3)}>
                                         ➕ Não, tenho mais para registar
+                                    </button>
+                                </>
+                            ) : fase === 2 ? (
+                                <>
+                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>🤔</div>
+                                    <h2>Como foi o dia?</h2>
+                                    <p>Cumpriu o horário completo ou saiu mais cedo?</p>
+                                    <button className="modal-btn modal-btn-yes" onClick={encerrarDia}>
+                                        ✅ Dia completo
+                                    </button>
+                                    <button className="modal-btn" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', marginBottom: '10px' }} onClick={saiMaisCedo}>
+                                        🕐 Saí mais cedo
                                     </button>
                                 </>
                             ) : (
@@ -839,7 +864,7 @@
                                     <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
                                         📦 Continuar a registar
                                     </button>
-                                    <button className="modal-btn modal-btn-later" onClick={terminarDia}>
+                                    <button className="modal-btn modal-btn-later" onClick={terminarMaisTarde}>
                                         🕐 Terminar mais tarde
                                     </button>
                                 </>

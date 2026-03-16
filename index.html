@@ -399,7 +399,16 @@
                             artigos: dados.filter(i => i.Artigo && i.Programa && !i.Operacao),
                             operacoes: dados.filter(i => i.Operacao && i.Unidade && i.Artigos),
                             perturbacoes: dados.filter(i => i.Perturbacao),
-                            colaboradores: dados.filter(i => i.Nome && i.Turno && i.Ativo)
+                            colaboradores: dados.filter(i => {
+                                if (!i.Nome || !i.Turno || !i.Ativo) return false;
+                                const ativo = (i.Ativo || '').toLowerCase() === 'sim';
+                                if (ativo) return true;
+                                const ds = i.DataSaida || i.dataSaida || '';
+                                if (!ds) return false;
+                                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                                const dataSaida = new Date(ds); dataSaida.setHours(0,0,0,0);
+                                return hoje < dataSaida;
+                            })
                         };
                         aplicarConfigs(dadosOrganizados);
                         return;
@@ -443,10 +452,18 @@
                         if (perts.length > 0) setPerturbsLista(perts);
                     }
 
-                    // ConfigColaboradores
+                    // ConfigColaboradores — exclui inativos cuja data de saída já chegou
                     if (dados.colaboradores && Array.isArray(dados.colaboradores) && dados.colaboradores.length > 0) {
+                        const hoje = new Date(); hoje.setHours(0,0,0,0);
                         const cols = dados.colaboradores
-                            .filter(c => (c.Ativo || c.ativo || '').toLowerCase() === 'sim')
+                            .filter(c => {
+                                const ativo = (c.Ativo || c.ativo || '').toLowerCase() === 'sim';
+                                if (ativo) return true;
+                                const ds = c.DataSaida || c.dataSaida || '';
+                                if (!ds) return false;
+                                const dataSaida = new Date(ds); dataSaida.setHours(0,0,0,0);
+                                return hoje < dataSaida;
+                            })
                             .map(c => c.Nome || c.nome)
                             .filter(c => c);
                         if (cols.length > 0) setColaboradoresLista(cols);

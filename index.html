@@ -309,7 +309,7 @@
             const [dataAtual, setDataAtual] = useState(new Date().toISOString().split('T')[0]);
 
             // Estados PIN
-            const [pins] = useState(() => JSON.parse(localStorage.getItem('prod_pins') || 'null') || {...DEFAULT_PINS});
+            const [pins, setPins] = useState(() => JSON.parse(localStorage.getItem('prod_pins') || 'null') || {...DEFAULT_PINS});
             const [selEmp, setSelEmp] = useState(null);
             const [pinDigits, setPinDigits] = useState(['', '', '', '']);
             const [pinError, setPinError] = useState(false);
@@ -455,6 +455,18 @@
                     // ConfigColaboradores — exclui inativos cuja data de saída já chegou
                     if (dados.colaboradores && Array.isArray(dados.colaboradores) && dados.colaboradores.length > 0) {
                         const hoje = new Date(); hoje.setHours(0,0,0,0);
+                        // Extrair PINs dos colaboradores
+                        const pinsDoConfig = {};
+                        dados.colaboradores.forEach(c => {
+                            const id = c.ID || c.id;
+                            const pin = c.PIN || c.pin;
+                            if (id && pin) pinsDoConfig[String(id)] = String(pin);
+                        });
+                        if (Object.keys(pinsDoConfig).length > 0) {
+                            setPins(pinsDoConfig);
+                            localStorage.setItem('prod_pins', JSON.stringify(pinsDoConfig));
+                        }
+
                         const cols = dados.colaboradores
                             .filter(c => {
                                 const ativo = (c.Ativo || c.ativo || '').toLowerCase() === 'sim';

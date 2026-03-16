@@ -91,6 +91,17 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
+        // Versão da app — incrementa para forçar limpeza do cache local
+        const APP_VERSION = '2.2';
+        const storedVersion = localStorage.getItem('appVersion');
+        if (storedVersion !== APP_VERSION) {
+            console.log('Nova versão detectada, a limpar cache local...');
+            localStorage.removeItem('configCache');
+            localStorage.removeItem('configCacheTime');
+            localStorage.removeItem('prod_pins');
+            localStorage.setItem('appVersion', APP_VERSION);
+        }
+
         // ============================================================
         // CONFIGURAÇÃO - URLs do Power Automate
         // ============================================================
@@ -668,6 +679,12 @@
 
             const doLoginPin = (emp, pin) => {
                 if (!emp || pin.length !== 4) return;
+                // Bloquear se não houver PIN definido
+                if (!pins[emp.id]) {
+                    setPinError(true);
+                    setPinDigits(['', '', '', '']);
+                    return;
+                }
                 if (pins[emp.id] !== pin) {
                     setPinError(true);
                     setPinDigits(['', '', '', '']);

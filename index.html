@@ -59,6 +59,32 @@
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     </style>
+    <script>
+        // Registar e forçar actualização do Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/Producao/sw.js')
+                .then(reg => {
+                    console.log('[SW] Registado:', reg.scope);
+                    // Verificar se há update disponível
+                    reg.update();
+                    reg.addEventListener('updatefound', () => {
+                        const newSW = reg.installing;
+                        newSW.addEventListener('statechange', () => {
+                            if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('[SW] Nova versão disponível — a recarregar...');
+                                window.location.reload();
+                            }
+                        });
+                    });
+                })
+                .catch(err => console.log('[SW] Erro:', err));
+            // Forçar reload quando SW toma controlo
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                console.log('[SW] Novo SW ativo — a recarregar...');
+                window.location.reload();
+            });
+        }
+    </script>
 </head>
 <body>
     <div id="root"></div>

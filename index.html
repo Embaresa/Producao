@@ -92,13 +92,14 @@
         const { useState, useEffect, useMemo } = React;
 
         // Versão da app — incrementa para forçar limpeza do cache local
-        const APP_VERSION = '2.2';
+        const APP_VERSION = '2.3';
         const storedVersion = localStorage.getItem('appVersion');
         if (storedVersion !== APP_VERSION) {
             console.log('Nova versão detectada, a limpar cache local...');
             localStorage.removeItem('configCache');
             localStorage.removeItem('configCacheTime');
             localStorage.removeItem('prod_pins');
+            localStorage.removeItem('prod_colabs_login');
             localStorage.setItem('appVersion', APP_VERSION);
         }
 
@@ -122,11 +123,12 @@
             { id: 5,  nm: "Hugo José Ferreira da Silva",      sh: "Hugo Silva" },
             { id: 6,  nm: "Joaquim Comenda",                  sh: "Joaquim Comenda" },
             { id: 7,  nm: "Nuno Rafael Pereira Franco",       sh: "Nuno Franco" },
-            { id: 8,  nm: "Paulo Saramago",                   sh: "Paulo Saramago" },
-            { id: 9,  nm: "Pedro Miguel Serranito Familia",   sh: "Pedro Familia" },
-            { id: 10, nm: "Rui Miguel Charrua Richáu",        sh: "Rui Richáu" },
-            { id: 11, nm: "Valdir Tavares",                   sh: "Valdir Tavares" },
-            { id: 12, nm: "William Chaves Inaba",             sh: "William Inaba" },
+            { id: 8,  nm: "Pedro Miguel Serranito Familia",   sh: "Pedro Familia" },
+            { id: 9,  nm: "Rui Miguel Charrua Richáu",        sh: "Rui Richáu" },
+            { id: 10, nm: "Valdir Tavares",                   sh: "Valdir Tavares" },
+            { id: 11, nm: "William Chaves Inaba",             sh: "William Inaba" },
+            { id: 12, nm: "Paulo Saramago",                   sh: "Paulo Saramago" },
+            { id: 13, nm: "Jonathan Braga",                   sh: "Jonathan Braga" },
         ];
 
         // Compatibilidade com código existente (lista de nomes completos)
@@ -137,8 +139,9 @@
         // ============================================================
         const DEFAULT_PINS = {
             1: '9012', 2: '4444', 3: '6666', 4: '7777',
-            5: '1234', 6: '5678', 7: '1111', 8: '3333',
-            9: '8888', 10: '9999', 11: '5555', 12: '2222'
+            5: '1234', 6: '5678', 7: '1111', 8: '8888',
+            9: '9999', 10: '5555', 11: '2222', 12: '3333',
+            13: '1020'
         };
 
         // ============================================================
@@ -347,6 +350,10 @@
 
             // Estados PIN
             const [pins, setPins] = useState(() => JSON.parse(localStorage.getItem('prod_pins') || 'null') || {...DEFAULT_PINS});
+            const [colaboradoresLogin, setColaboradoresLogin] = useState(() => {
+                const s = localStorage.getItem('prod_colabs_login');
+                return s ? JSON.parse(s) : COLABORADORES_LISTA;
+            });
             const [selEmp, setSelEmp] = useState(null);
             const [pinDigits, setPinDigits] = useState(['', '', '', '']);
             const [pinError, setPinError] = useState(false);
@@ -504,9 +511,33 @@
                             localStorage.setItem('prod_pins', JSON.stringify(pinsDoConfig));
                         }
 
+                        // Construir lista de login com IDs e nomes curtos do Excel
+                        const loginList = dados.colaboradores
+                            .filter(c => {
+                                const ativo = ['sim','true','verdadeiro'].includes((c.Ativo || c.ativo || '').toLowerCase());
+                                if (ativo) return true;
+                                const ds = c.DataSaida || c.dataSaida || '';
+                                if (!ds) return false;
+                                const dataSaida = new Date(ds); dataSaida.setHours(0,0,0,0);
+                                return hoje < dataSaida;
+                            })
+                            .map(c => {
+                                const id = parseInt(c.ID || c.id);
+                                const nm = c.Nome || c.nome || '';
+                                // Usar nome curto da lista hardcoded se existir, senão usar primeiro+último nome
+                                const hardcoded = COLABORADORES_LISTA.find(x => x.id === id);
+                                const sh = hardcoded ? hardcoded.sh : nm.split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' ');
+                                return { id, nm, sh };
+                            })
+                            .filter(c => c.id && c.nm);
+                        if (loginList.length > 0) {
+                            setColaboradoresLogin(loginList);
+                            localStorage.setItem('prod_colabs_login', JSON.stringify(loginList));
+                        }
+
                         const cols = dados.colaboradores
                             .filter(c => {
-                                const ativo = (c.Ativo || c.ativo || '').toLowerCase() === 'sim';
+                                const ativo = ['sim','true','verdadeiro'].includes((c.Ativo || c.ativo || '').toLowerCase());
                                 if (ativo) return true;
                                 const ds = c.DataSaida || c.dataSaida || '';
                                 if (!ds) return false;
@@ -526,6 +557,8 @@
             const recarregarConfigs = () => {
                 localStorage.removeItem('configCache');
                 localStorage.removeItem('configCacheTime');
+                localStorage.removeItem('prod_colabs_login');
+                localStorage.removeItem('prod_pins');
                 setConfigLoaded(false);
                 setConfigError('');
                 window.location.reload();
@@ -971,7 +1004,7 @@
                             <div style={{ marginBottom: '16px' }}>
                                 <label className="label">👤 Selecionar colaborador</label>
                                 <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {COLABORADORES_LISTA.map(emp => (
+                                    {colaboradoresLogin.map(emp => (
                                         <div key={emp.id}
                                             onClick={() => pickEmp(emp)}
                                             style={{

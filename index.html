@@ -220,6 +220,14 @@
             return !!tipo && !TIPOS_SEM_ENCOMENDA_OBRIG.includes(tipo);
         }
 
+        // Deteta operações de embalamento (palavra "Embalamento" na unidade ou no nome).
+        function ehOperacaoEmbalamento(op) {
+            if (!op) return false;
+            const unidade = (op.unidade || '').toLowerCase();
+            const nome = (op.op || op.operacao || '').toLowerCase();
+            return unidade.includes('embalamento') || nome.includes('embalamento');
+        }
+
         // ============================================================
         // COLABORADORES (filtro de ativos)
         // ============================================================
@@ -792,18 +800,33 @@
             // da app de encomendas: estado é 'pendente' ou 'produzida' (ainda não saiu).
             const aindaNaoEntregue = (e) => e.estado === 'pendente' || e.estado === 'produzida';
 
-            // Nºs de série de encomendas em curso para o artigo selecionado,
-            // com data de entrega prevista nos próximos 10 dias.
+            // Nºs de série de encomendas para o artigo+operação selecionados.
+            // - Para EMBALAMENTO: estado === 'entregue' (já chegaram à secção de embalamento).
+            //   Sem janela de tempo (todas as que estão na secção devem ser embaladas).
+            // - Para outras operações: estado === 'pendente' ou 'produzida', janela 10 dias.
             const numerosSerieDisponiveis = useMemo(() => {
                 if (!registo.artigo) return [];
+                const opSel = operacoesLista.find(o => o.op === registo.operacao);
+                const ehEmb = ehOperacaoEmbalamento(opSel);
                 const artNorm = normalizaArtigo(registo.artigo);
-                return encomendas
-                    .filter(e => normalizaArtigo(e.caixa) === artNorm)
+
+                const baseFiltrada = encomendas
+                    .filter(e => normalizaArtigo(e.caixa) === artNorm);
+
+                if (ehEmb) {
+                    // Embalamento: caixas entregues à secção de embalamento, qualquer data
+                    return baseFiltrada
+                        .filter(e => e.estado === 'entregue')
+                        .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                        .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
+                }
+                // Produção (soldadura, montagem, etc.): pendente/produzida + janela 10 dias
+                return baseFiltrada
                     .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
                     .filter(e => e.dias !== null && e.dias >= 0 && e.dias <= 10)
                     .sort((a, b) => a.dias - b.dias);
-            }, [registo.artigo, encomendas]);
+            }, [registo.artigo, registo.operacao, encomendas, operacoesLista]);
 
             // Lista de encomendas para Transporte (multi-select):
             // qualquer artigo, subEstado === "solicitada", estado pendente/produzida (ainda
@@ -1341,46 +1364,12 @@
                                     );
                                 })()}
 
-                                {registo.artigo && numSerieEhObrigatorio(registo.tipo) && !ehMultiNumSerie(registo.tipo) && (
-                                    <div className="mb-3">
-                                        <label className="label">🏷️ Nº Série da Encomenda</label>
-                                        <select
-                                            className="input"
-                                            value={registo.numSerie}
-                                            onChange={e => setRegisto({ ...registo, numSerie: e.target.value })}
-                                            disabled={numerosSerieDisponiveis.length === 0}
-                                        >
-                                            <option value="">
-                                                {numerosSerieDisponiveis.length === 0
-                                                    ? 'Sem encomendas em curso (próximos 10 dias)'
-                                                    : 'Selecionar...'}
-                                            </option>
-                                            {numerosSerieDisponiveis.map((e, i) => (
-                                                <option key={i} value={e.numSerie}>
-                                                    {e.numSerie}
-                                                    {e.dias === 0 ? ' — entrega hoje' : (e.dias === 1 ? ' — entrega amanhã' : ' — entrega em ' + e.dias + ' dias')}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        {numerosSerieDisponiveis.length === 0 && (
-                                            <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
-                                                ⚠️ Não há encomendas deste artigo para entrega nos próximos 10 dias. Confirma com o supervisor se escolheste o artigo certo.
-                                            </div>
-                                        )}
-                                        {carregandoEnc && (
-                                            <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>A carregar encomendas...</div>
-                                        )}
-                                        {encError && (
-                                            <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309' }}>{encError}</div>
-                                        )}
-                                    </div>
-                                )}
-
                                 <div className="mb-3">
                                     <label className="label">🔧 Operação</label>
                                     <select className="input" value={registo.operacao} onChange={e => {
                                         const o = operacoesLista.find(x => x.op === e.target.value);
-                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '' });
+                                        // Reset numSerie quando muda operação (o filtro de NS depende da operação)
+                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '', numSerie: '' });
                                     }} disabled={!registo.artigo}>
                                         <option value="">{registo.artigo ? 'Selecionar...' : 'Selecione artigo primeiro'}</option>
                                         {opsFilt.map((o, i) => <option key={i} value={o.op}>{o.op}</option>)}
@@ -1391,6 +1380,50 @@
                                         </div>
                                     )}
                                 </div>
+
+                                {registo.artigo && registo.operacao && numSerieEhObrigatorio(registo.tipo) && !ehMultiNumSerie(registo.tipo) && (() => {
+                                    const opSel = operacoesLista.find(o => o.op === registo.operacao);
+                                    const ehEmb = ehOperacaoEmbalamento(opSel);
+                                    return (
+                                        <div className="mb-3">
+                                            <label className="label">🏷️ Nº Série da Encomenda</label>
+                                            <select
+                                                className="input"
+                                                value={registo.numSerie}
+                                                onChange={e => setRegisto({ ...registo, numSerie: e.target.value })}
+                                                disabled={numerosSerieDisponiveis.length === 0}
+                                            >
+                                                <option value="">
+                                                    {numerosSerieDisponiveis.length === 0
+                                                        ? (ehEmb ? 'Sem caixas entregues à secção de embalamento' : 'Sem encomendas em curso (próximos 10 dias)')
+                                                        : 'Selecionar...'}
+                                                </option>
+                                                {numerosSerieDisponiveis.map((e, i) => (
+                                                    <option key={i} value={e.numSerie}>
+                                                        {e.numSerie}
+                                                        {ehEmb
+                                                            ? (e.dataEntregaPrevista ? ' — entrega ' + e.dataEntregaPrevista.split('-').reverse().join('/') : '')
+                                                            : (e.dias === 0 ? ' — entrega hoje' : (e.dias === 1 ? ' — entrega amanhã' : ' — entrega em ' + e.dias + ' dias'))
+                                                        }
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {numerosSerieDisponiveis.length === 0 && (
+                                                <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                                    {ehEmb
+                                                        ? '⚠️ Não há caixas deste artigo entregues à secção de embalamento. Confirma com o supervisor.'
+                                                        : '⚠️ Não há encomendas deste artigo para entrega nos próximos 10 dias. Confirma com o supervisor se escolheste o artigo certo.'}
+                                                </div>
+                                            )}
+                                            {carregandoEnc && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>A carregar encomendas...</div>
+                                            )}
+                                            {encError && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309' }}>{encError}</div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
 
                                 <div className="mb-3">
                                     <label className="label">⏱️ Horário</label>
@@ -1417,7 +1450,7 @@
                                 </div>
 
                                 {(() => {
-                                    const faltaNumSerie = numSerieEhObrigatorio(registo.tipo) && registo.artigo && !registo.numSerie;
+                                    const faltaNumSerie = numSerieEhObrigatorio(registo.tipo) && registo.artigo && (ehMultiNumSerie(registo.tipo) || registo.operacao) && !registo.numSerie;
                                     const submitBloqueado = loading || faltaNumSerie;
                                     return (
                                         <button

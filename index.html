@@ -91,25 +91,14 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // Versão da app — incrementa para forçar limpeza do cache local
-        const APP_VERSION = '2.3';
-        const storedVersion = localStorage.getItem('appVersion');
-        if (storedVersion !== APP_VERSION) {
-            console.log('Nova versão detectada, a limpar cache local...');
-            localStorage.removeItem('configCache');
-            localStorage.removeItem('configCacheTime');
-            localStorage.removeItem('prod_pins');
-            localStorage.removeItem('prod_colabs_login');
-            localStorage.setItem('appVersion', APP_VERSION);
-        }
-
         // ============================================================
         // CONFIGURAÇÃO - URLs do Power Automate
         // ============================================================
         const CONFIG = {
             URL_PRODUCAO: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8c8cb9f38df4489eaa2ebd6afcdab255/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jMin9p5_ZxITDMuRcm2PeH8LlrC6SxeM_hNTLRfn-CI',
             URL_PERTURBACOES: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4',
-            URL_CONFIG: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/464482ea19714e50b858771991c0539d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=H29XBCpPy1dyMk7Gyj6LAWy8RKI8Q4mpUFdI5qanNKU'
+            URL_CONFIG: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/464482ea19714e50b858771991c0539d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=H29XBCpPy1dyMk7Gyj6LAWy8RKI8Q4mpUFdI5qanNKU',
+            URL_ENCOMENDAS: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c77f5fdeb5704193aa1180062b45aad9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2Eub1i-QYw4yW0Jfyp4gvTxgChXKapj9JIyzNeiIUe8'
         };
 
         // ============================================================
@@ -123,12 +112,11 @@
             { id: 5,  nm: "Hugo José Ferreira da Silva",      sh: "Hugo Silva" },
             { id: 6,  nm: "Joaquim Comenda",                  sh: "Joaquim Comenda" },
             { id: 7,  nm: "Nuno Rafael Pereira Franco",       sh: "Nuno Franco" },
-            { id: 8,  nm: "Pedro Miguel Serranito Familia",   sh: "Pedro Familia" },
-            { id: 9,  nm: "Rui Miguel Charrua Richáu",        sh: "Rui Richáu" },
-            { id: 10, nm: "Valdir Tavares",                   sh: "Valdir Tavares" },
-            { id: 11, nm: "William Chaves Inaba",             sh: "William Inaba" },
-            { id: 12, nm: "Paulo Saramago",                   sh: "Paulo Saramago" },
-            { id: 13, nm: "Jonathan Braga",                   sh: "Jonathan Braga" },
+            { id: 8,  nm: "Paulo Saramago",                   sh: "Paulo Saramago" },
+            { id: 9,  nm: "Pedro Miguel Serranito Familia",   sh: "Pedro Familia" },
+            { id: 10, nm: "Rui Miguel Charrua Richáu",        sh: "Rui Richáu" },
+            { id: 11, nm: "Valdir Tavares",                   sh: "Valdir Tavares" },
+            { id: 12, nm: "William Chaves Inaba",             sh: "William Inaba" },
         ];
 
         // Compatibilidade com código existente (lista de nomes completos)
@@ -139,10 +127,112 @@
         // ============================================================
         const DEFAULT_PINS = {
             1: '9012', 2: '4444', 3: '6666', 4: '7777',
-            5: '1234', 6: '5678', 7: '1111', 8: '8888',
-            9: '9999', 10: '5555', 11: '2222', 12: '3333',
-            13: '1020'
+            5: '1234', 6: '5678', 7: '1111', 8: '3333',
+            9: '8888', 10: '9999', 11: '5555', 12: '2222'
         };
+
+        // ============================================================
+        // SUBSTITUIÇÃO DE ARTIGOS
+        // ============================================================
+        // Converte uma data do Excel/Power Automate para string ISO 'YYYY-MM-DD'.
+        // Aceita Excel serial (string/número), dd/mm/yyyy, ISO yyyy-mm-dd[Thh:mm...].
+        // Usa UTC para evitar bugs de timezone com horário de verão.
+        function parseDataConfig(val) {
+            if (val === null || val === undefined || val === '') return null;
+            const s = String(val).trim();
+            if (!s) return null;
+            if (/^\d+(\.\d+)?$/.test(s)) {
+                const d = new Date((parseFloat(s) - 25569) * 86400 * 1000);
+                if (isNaN(d.getTime())) return null;
+                return d.getUTCFullYear() + '-' +
+                       String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                       String(d.getUTCDate()).padStart(2, '0');
+            }
+            const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) return iso[1] + '-' + iso[2] + '-' + iso[3];
+            const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return null;
+            return d.getUTCFullYear() + '-' +
+                   String(d.getUTCMonth() + 1).padStart(2, '0') + '-' +
+                   String(d.getUTCDate()).padStart(2, '0');
+        }
+
+        // Devolve true se o artigo deve aparecer nos dropdowns de NOVO registo.
+        function artigoEstaAtivo(a, dataRef) {
+            if (!a.substituidoPor) return true;
+            if (!a.dataSubstituicao) return false;
+            const ref = (typeof dataRef === 'string' && dataRef)
+                ? dataRef
+                : new Date().toISOString().slice(0, 10);
+            return ref < a.dataSubstituicao;
+        }
+
+        // ============================================================
+        // ENCOMENDAS EM CURSO (Nº SÉRIE)
+        // ============================================================
+        // Tipos cuja seleção de Nº Série é OPCIONAL (não associados a encomendas).
+        const TIPOS_SEM_ENCOMENDA_OBRIG = ['Logistica', 'E1-Frac', 'Maquinacao', 'Transporte'];
+
+        // Estados finais (encomenda não está mais "em curso")
+        const ESTADOS_ENCOMENDA_FINAIS = [
+            'Embalada ANN COMP', 'Fornecido ANN COMP',
+            'Embalada ANN MET', 'Fornecido ANN MET'
+        ];
+
+        function encomendaEmCurso(enc) {
+            if ((enc.estado || '').toLowerCase() === 'terminada') return false;
+            if (ESTADOS_ENCOMENDA_FINAIS.includes(enc.estadoFinal || '')) return false;
+            return true;
+        }
+
+        // Devolve nº de dias entre hoje e dataISO (negativo se passado).
+        function diasAte(dataISO) {
+            if (!dataISO) return null;
+            const d = new Date(dataISO);
+            if (isNaN(d.getTime())) return null;
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            d.setHours(0, 0, 0, 0);
+            return Math.round((d - hoje) / 86400000);
+        }
+
+        function normalizaArtigo(s) {
+            return (s || '').toString().replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function numSerieEhObrigatorio(tipo) {
+            return !!tipo && !TIPOS_SEM_ENCOMENDA_OBRIG.includes(tipo);
+        }
+
+        // ============================================================
+        // COLABORADORES (filtro de ativos)
+        // ============================================================
+        // Gera nome curto a partir do nome completo: "André Avelino Tavares Rocha" -> "André Rocha"
+        function nomeShort(nm) {
+            const partes = (nm || '').trim().split(/\s+/).filter(Boolean);
+            if (partes.length === 0) return '';
+            if (partes.length === 1) return partes[0];
+            return partes[0] + ' ' + partes[partes.length - 1];
+        }
+
+        // Devolve true se o colaborador deve aparecer na lista do PIN.
+        // Regra: se DataSaida já passou, esconde sempre. Senão, vê se está ativo.
+        function colaboradorEstaAtivo(c) {
+            const ds = c.dataSaida || c.DataSaida || '';
+            if (ds) {
+                const dataSaida = new Date(ds);
+                if (!isNaN(dataSaida.getTime())) {
+                    const hoje = new Date();
+                    hoje.setHours(0, 0, 0, 0);
+                    dataSaida.setHours(0, 0, 0, 0);
+                    if (hoje >= dataSaida) return false; // já saiu
+                }
+            }
+            const ativoVal = String(c.ativo ?? c.Ativo ?? 'sim').toLowerCase();
+            return ativoVal === 'sim' || ativoVal === 'true' || ativoVal === 'verdadeiro';
+        }
 
         // ============================================================
         // DADOS - Artigos por tipo
@@ -350,10 +440,6 @@
 
             // Estados PIN
             const [pins, setPins] = useState(() => JSON.parse(localStorage.getItem('prod_pins') || 'null') || {...DEFAULT_PINS});
-            const [colaboradoresLogin, setColaboradoresLogin] = useState(() => {
-                const s = localStorage.getItem('prod_colabs_login');
-                return s ? JSON.parse(s) : COLABORADORES_LISTA;
-            });
             const [selEmp, setSelEmp] = useState(null);
             const [pinDigits, setPinDigits] = useState(['', '', '', '']);
             const [pinError, setPinError] = useState(false);
@@ -373,7 +459,7 @@
             });
 
             const [registo, setRegisto] = useState({
-                data: dataAtual, tipo: '', artigo: '', operacao: '', unidade: '',
+                data: dataAtual, tipo: '', artigo: '', numSerie: '', operacao: '', unidade: '',
                 horaInicio: '', horaFim: '', comentarios: ''
             });
 
@@ -387,6 +473,9 @@
             const [operacoesLista, setOperacoesLista] = useState(OPERACOES);
             const [perturbsLista, setPerturbsLista] = useState(PERTURBACOES);
             const [colaboradoresLista, setColaboradoresLista] = useState(COLABORADORES);
+            // Lista de colaboradores ATIVOS com estrutura completa { id, nm, sh } para o PIN screen.
+            // Inicializa com a lista hardcoded como fallback.
+            const [colabsAtivos, setColabsAtivos] = useState(COLABORADORES_LISTA);
             const [configLoaded, setConfigLoaded] = useState(false);
             const [configError, setConfigError] = useState('');
 
@@ -472,7 +561,9 @@
                     if (dados.artigos && Array.isArray(dados.artigos) && dados.artigos.length > 0) {
                         const arts = dados.artigos.map(a => ({
                             artigo: a.Artigo || a.artigo,
-                            tipo: a.Programa || a.programa || a.Tipo || a.tipo
+                            tipo: a.Programa || a.programa || a.Tipo || a.tipo,
+                            substituidoPor: a.SubstituidoPor || a.substituidoPor || '',
+                            dataSubstituicao: parseDataConfig(a.DataSubstituicao || a.dataSubstituicao)
                         })).filter(a => a.artigo);
                         if (arts.length > 0) setArtigosLista(arts);
                     }
@@ -511,54 +602,81 @@
                             localStorage.setItem('prod_pins', JSON.stringify(pinsDoConfig));
                         }
 
-                        // Construir lista de login com IDs e nomes curtos do Excel
-                        const loginList = dados.colaboradores
-                            .filter(c => {
-                                const ativo = ['sim','true','verdadeiro'].includes((c.Ativo || c.ativo || '').toLowerCase());
-                                if (ativo) return true;
-                                const ds = c.DataSaida || c.dataSaida || '';
-                                if (!ds) return false;
-                                const dataSaida = new Date(ds); dataSaida.setHours(0,0,0,0);
-                                return hoje < dataSaida;
-                            })
-                            .map(c => {
-                                const id = parseInt(c.ID || c.id);
-                                const nm = c.Nome || c.nome || '';
-                                // Usar nome curto da lista hardcoded se existir, senão usar primeiro+último nome
-                                const hardcoded = COLABORADORES_LISTA.find(x => x.id === id);
-                                const sh = hardcoded ? hardcoded.sh : nm.split(' ').filter((_,i,a) => i===0||i===a.length-1).join(' ');
-                                return { id, nm, sh };
-                            })
-                            .filter(c => c.id && c.nm);
-                        if (loginList.length > 0) {
-                            setColaboradoresLogin(loginList);
-                            localStorage.setItem('prod_colabs_login', JSON.stringify(loginList));
+                        const colsAtivos = dados.colaboradores
+                            .map(c => ({
+                                id: parseInt(c.ID || c.id) || 0,
+                                nm: (c.Nome || c.nome || '').toString().trim(),
+                                sh: nomeShort(c.Nome || c.nome || ''),
+                                ativo: c.Ativo || c.ativo,
+                                dataSaida: c.DataSaida || c.dataSaida || ''
+                            }))
+                            .filter(c => c.nm && c.id)
+                            .filter(colaboradorEstaAtivo)
+                            .sort((a, b) => a.sh.localeCompare(b.sh));
+                        if (colsAtivos.length > 0) {
+                            setColabsAtivos(colsAtivos);
+                            setColaboradoresLista(colsAtivos.map(c => c.nm));
                         }
-
-                        const cols = dados.colaboradores
-                            .filter(c => {
-                                const ativo = ['sim','true','verdadeiro'].includes((c.Ativo || c.ativo || '').toLowerCase());
-                                if (ativo) return true;
-                                const ds = c.DataSaida || c.dataSaida || '';
-                                if (!ds) return false;
-                                const dataSaida = new Date(ds); dataSaida.setHours(0,0,0,0);
-                                return hoje < dataSaida;
-                            })
-                            .map(c => c.Nome || c.nome)
-                            .filter(c => c);
-                        if (cols.length > 0) setColaboradoresLista(cols);
                     }
                 };
 
                 carregarConfigs();
             }, []);
 
+            // ============================================================
+            // ENCOMENDAS EM CURSO (para selecionar Nº Série)
+            // ============================================================
+            const [encomendas, setEncomendas] = useState(() => {
+                try {
+                    const c = localStorage.getItem('encomendasCache');
+                    return c ? JSON.parse(c) : [];
+                } catch (e) { return []; }
+            });
+            const [carregandoEnc, setCarregandoEnc] = useState(false);
+            const [encError, setEncError] = useState('');
+
+            const carregarEncomendas = async () => {
+                setCarregandoEnc(true);
+                setEncError('');
+                try {
+                    const resp = await fetch(CONFIG.URL_ENCOMENDAS, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    if (!resp.ok) throw new Error('Status ' + resp.status);
+                    const dados = await resp.json();
+                    const arr = Array.isArray(dados) ? dados : (dados.value || []);
+                    const encs = arr.map(row => ({
+                        caixa: (row.Caixa || row.caixa || '').toString().trim(),
+                        tipologia: (row.Tipologia || row.tipologia || '').toString().trim(),
+                        numSerie: (row['Nº série'] || row.NumSerie || row['Nº serie'] || row['NumSérie'] || '').toString().trim(),
+                        estado: (row.Estado || row.estado || '').toString().trim(),
+                        estadoFinal: (row['Estado Final'] || row.EstadoFinal || '').toString().trim(),
+                        dataEntregaPrevista: parseDataConfig(row['Data Entrega Prevista'] || row.DataEntregaPrevista) || ''
+                    })).filter(e => e.caixa && e.numSerie);
+                    setEncomendas(encs);
+                    localStorage.setItem('encomendasCache', JSON.stringify(encs));
+                    localStorage.setItem('encomendasCacheTime', Date.now().toString());
+                    console.log('Encomendas carregadas:', encs.length);
+                } catch (e) {
+                    console.log('Erro a carregar encomendas:', e.message);
+                    setEncError('Sem ligação - usando cache anterior');
+                }
+                setCarregandoEnc(false);
+            };
+
+            // Carrega ao login + recarrega se cache > 5min
+            useEffect(() => {
+                if (!loggedIn) return;
+                const t = parseInt(localStorage.getItem('encomendasCacheTime') || '0');
+                if (Date.now() - t > 5 * 60 * 1000) carregarEncomendas();
+            }, [loggedIn]);
+
             // Forçar recarga das configs
             const recarregarConfigs = () => {
                 localStorage.removeItem('configCache');
                 localStorage.removeItem('configCacheTime');
-                localStorage.removeItem('prod_colabs_login');
-                localStorage.removeItem('prod_pins');
                 setConfigLoaded(false);
                 setConfigError('');
                 window.location.reload();
@@ -593,7 +711,8 @@
                         TipoCaixa: r.tipoCaixa || '', Operacao: r.operacao,
                         UnidadeProducao: r.unidade, Colaborador: r.colaborador,
                         HoraInicio: r.horaInicio, HoraFim: r.horaFim,
-                        Duracao: r.duracao, Comentarios: r.comentarios || '',
+                        Duracao: (r.duracao || 0).toString(), Comentarios: r.comentarios || '',
+                        NumSerie: r.numSerie || '',
                         DataHoraRegisto: r.dataHora
                     });
                     const idx = novosRegs.findIndex(x => x.id === r.id);
@@ -639,12 +758,29 @@
 
             // Filtros
             const artigosFilt = useMemo(() => 
-                registo.tipo ? artigosLista.filter(a => a.tipo === registo.tipo) : []
-            , [registo.tipo, artigosLista]);
+                registo.tipo
+                    ? artigosLista
+                        .filter(a => artigoEstaAtivo(a, registo.data))
+                        .filter(a => a.tipo === registo.tipo)
+                    : []
+            , [registo.tipo, registo.data, artigosLista]);
 
             const opsFilt = useMemo(() => 
                 registo.artigo ? operacoesLista.filter(o => o.artigos.includes(registo.artigo)) : []
             , [registo.artigo, operacoesLista]);
+
+            // Nºs de série de encomendas em curso para o artigo selecionado,
+            // com data de entrega prevista nos próximos 10 dias.
+            const numerosSerieDisponiveis = useMemo(() => {
+                if (!registo.artigo) return [];
+                const artNorm = normalizaArtigo(registo.artigo);
+                return encomendas
+                    .filter(e => normalizaArtigo(e.caixa) === artNorm)
+                    .filter(encomendaEmCurso)
+                    .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                    .filter(e => e.dias !== null && e.dias >= 0 && e.dias <= 10)
+                    .sort((a, b) => a.dias - b.dias);
+            }, [registo.artigo, encomendas]);
 
             const regsDia = useMemo(() => 
                 registos.filter(r => r.data === dataAtual && r.colaborador === operador)
@@ -712,12 +848,6 @@
 
             const doLoginPin = (emp, pin) => {
                 if (!emp || pin.length !== 4) return;
-                // Bloquear se não houver PIN definido
-                if (!pins[emp.id]) {
-                    setPinError(true);
-                    setPinDigits(['', '', '', '']);
-                    return;
-                }
                 if (pins[emp.id] !== pin) {
                     setPinError(true);
                     setPinDigits(['', '', '', '']);
@@ -779,6 +909,11 @@
                     return;
                 }
 
+                if (numSerieEhObrigatorio(registo.tipo) && !registo.numSerie) {
+                    alert('Tens de selecionar o Nº Série da encomenda. Se não houver nenhum disponível para este artigo nos próximos 10 dias, confirma com o supervisor se escolheste o artigo certo.');
+                    return;
+                }
+
                 if (eFeriado(registo.data) && !confirm(formatData(registo.data) + ' é feriado. Continuar?')) return;
 
                 setLoading(true);
@@ -790,6 +925,7 @@
                     id,
                     data: registo.data,
                     artigo: registo.artigo,
+                    numSerie: registo.numSerie || '',
                     tipoCaixa: art?.tipo || '',
                     operacao: registo.operacao,
                     unidade: registo.unidade,
@@ -813,8 +949,9 @@
                     Colaborador: operador,
                     HoraInicio: registo.horaInicio,
                     HoraFim: registo.horaFim,
-                    Duracao: dur,
+                    Duracao: dur.toString(),
                     Comentarios: registo.comentarios || '',
+                    NumSerie: registo.numSerie || '',
                     DataHoraRegisto: new Date().toLocaleString('pt-PT')
                 });
 
@@ -823,7 +960,7 @@
 
                 setRegisto({
                     ...registo,
-                    artigo: '', operacao: '', unidade: '',
+                    artigo: '', numSerie: '', operacao: '', unidade: '',
                     horaInicio: registo.horaFim, horaFim: '', comentarios: ''
                 });
 
@@ -1004,7 +1141,7 @@
                             <div style={{ marginBottom: '16px' }}>
                                 <label className="label">👤 Selecionar colaborador</label>
                                 <div style={{ maxHeight: '260px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {colaboradoresLogin.map(emp => (
+                                    {colabsAtivos.map(emp => (
                                         <div key={emp.id}
                                             onClick={() => pickEmp(emp)}
                                             style={{
@@ -1085,11 +1222,46 @@
 
                                 <div className="mb-3">
                                     <label className="label">📦 Artigo</label>
-                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, operacao: '', unidade: '' })} disabled={!registo.tipo}>
+                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, numSerie: '', operacao: '', unidade: '' })} disabled={!registo.tipo}>
                                         <option value="">{registo.tipo ? 'Selecionar...' : 'Selecione programa primeiro'}</option>
                                         {artigosFilt.map((a, i) => <option key={i} value={a.artigo}>{a.artigo}</option>)}
                                     </select>
                                 </div>
+
+                                {registo.artigo && numSerieEhObrigatorio(registo.tipo) && (
+                                    <div className="mb-3">
+                                        <label className="label">🏷️ Nº Série da Encomenda</label>
+                                        <select
+                                            className="input"
+                                            value={registo.numSerie}
+                                            onChange={e => setRegisto({ ...registo, numSerie: e.target.value })}
+                                            disabled={numerosSerieDisponiveis.length === 0}
+                                        >
+                                            <option value="">
+                                                {numerosSerieDisponiveis.length === 0
+                                                    ? 'Sem encomendas em curso (próximos 10 dias)'
+                                                    : 'Selecionar...'}
+                                            </option>
+                                            {numerosSerieDisponiveis.map((e, i) => (
+                                                <option key={i} value={e.numSerie}>
+                                                    {e.numSerie}
+                                                    {e.dias === 0 ? ' — entrega hoje' : (e.dias === 1 ? ' — entrega amanhã' : ' — entrega em ' + e.dias + ' dias')}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {numerosSerieDisponiveis.length === 0 && (
+                                            <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                                ⚠️ Não há encomendas deste artigo para entrega nos próximos 10 dias. Confirma com o supervisor se escolheste o artigo certo.
+                                            </div>
+                                        )}
+                                        {carregandoEnc && (
+                                            <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>A carregar encomendas...</div>
+                                        )}
+                                        {encError && (
+                                            <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309' }}>{encError}</div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="mb-3">
                                     <label className="label">🔧 Operação</label>
@@ -1131,9 +1303,26 @@
                                     <textarea className="input" rows={2} value={registo.comentarios} onChange={e => setRegisto({ ...registo, comentarios: e.target.value })} placeholder="Observações..." />
                                 </div>
 
-                                <button className="btn btn-success" style={{ width: '100%', padding: '16px', fontSize: '18px' }} onClick={addRegisto} disabled={loading}>
-                                    {loading ? '⏳ A guardar...' : '✓ Registar Operação'}
-                                </button>
+                                {(() => {
+                                    const faltaNumSerie = numSerieEhObrigatorio(registo.tipo) && registo.artigo && !registo.numSerie;
+                                    const submitBloqueado = loading || faltaNumSerie;
+                                    return (
+                                        <button
+                                            className="btn btn-success"
+                                            style={{
+                                                width: '100%', padding: '16px', fontSize: '18px',
+                                                opacity: submitBloqueado ? 0.5 : 1,
+                                                cursor: submitBloqueado ? 'not-allowed' : 'pointer'
+                                            }}
+                                            onClick={addRegisto}
+                                            disabled={submitBloqueado}
+                                        >
+                                            {loading
+                                                ? '⏳ A guardar...'
+                                                : (faltaNumSerie ? '🔒 Selecione um Nº Série' : '✓ Registar Operação')}
+                                        </button>
+                                    );
+                                })()}
                             </div>
 
                             {regsDia.length > 0 && (

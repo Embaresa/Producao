@@ -173,7 +173,21 @@
         // ENCOMENDAS EM CURSO (Nº SÉRIE)
         // ============================================================
         // Tipos cuja seleção de Nº Série é OPCIONAL (não associados a encomendas).
-        const TIPOS_SEM_ENCOMENDA_OBRIG = ['Logistica', 'E1-Frac', 'Maquinacao', 'Transporte'];
+        // Tipos cuja seleção de Nº Série é OPCIONAL (não associados a encomendas).
+        const TIPOS_SEM_ENCOMENDA_OBRIG = ['Logistica', 'E1-Frac', 'Maquinacao'];
+
+        // Tipos com seleção MÚLTIPLA de Nº Série (transporte de várias caixas em simultâneo).
+        const TIPOS_MULTI_NS = ['Transporte'];
+        function ehMultiNumSerie(tipo) {
+            return TIPOS_MULTI_NS.includes(tipo);
+        }
+        // Helpers para converter entre array de NS e string concatenada com "; ".
+        function nsArray(s) {
+            return (s || '').split(';').map(x => x.trim()).filter(Boolean);
+        }
+        function nsStr(arr) {
+            return (arr || []).join('; ');
+        }
 
         // Estados finais (encomenda não está mais "em curso")
         const ESTADOS_ENCOMENDA_FINAIS = [
@@ -651,9 +665,14 @@
                         caixa: (row.Caixa || row.caixa || '').toString().trim(),
                         tipologia: (row.Tipologia || row.tipologia || '').toString().trim(),
                         numSerie: (row['Nº série'] || row.NumSerie || row['Nº serie'] || row['NumSérie'] || '').toString().trim(),
-                        estado: (row.Estado || row.estado || '').toString().trim(),
+                        estado: (row.Estado || row.estado || '').toString().trim().toLowerCase(),
+                        subEstado: (row.SubEstado || row.subEstado || '').toString().trim().toLowerCase(),
                         estadoFinal: (row['Estado Final'] || row.EstadoFinal || '').toString().trim(),
-                        dataEntregaPrevista: parseDataConfig(row['Data Entrega Prevista'] || row.DataEntregaPrevista) || ''
+                        dataEntregaPrevista: parseDataConfig(row['Data Entrega Prevista'] || row.DataEntregaPrevista) || '',
+                        dataEntregaReal: parseDataConfig(row['Data Entrega Real'] || row.DataEntregaReal) || '',
+                        qtdEntregue: parseInt(row['Quantidade Entregue'] || row.QuantidadeEntregue) || 0,
+                        dataEmbalamento: parseDataConfig(row['Data Embalamento'] || row.DataEmbalamento) || '',
+                        qtdEmbalada: parseInt(row['Quantidade Embalada'] || row.QuantidadeEmbalada) || 0
                     })).filter(e => e.caixa && e.numSerie);
                     setEncomendas(encs);
                     localStorage.setItem('encomendasCache', JSON.stringify(encs));
@@ -769,6 +788,10 @@
                 registo.artigo ? operacoesLista.filter(o => o.artigos.includes(registo.artigo)) : []
             , [registo.artigo, operacoesLista]);
 
+            // Helper: encomenda pode ser registada/transportada — alinhado com critério
+            // da app de encomendas: estado é 'pendente' ou 'produzida' (ainda não saiu).
+            const aindaNaoEntregue = (e) => e.estado === 'pendente' || e.estado === 'produzida';
+
             // Nºs de série de encomendas em curso para o artigo selecionado,
             // com data de entrega prevista nos próximos 10 dias.
             const numerosSerieDisponiveis = useMemo(() => {
@@ -776,11 +799,25 @@
                 const artNorm = normalizaArtigo(registo.artigo);
                 return encomendas
                     .filter(e => normalizaArtigo(e.caixa) === artNorm)
-                    .filter(encomendaEmCurso)
+                    .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
                     .filter(e => e.dias !== null && e.dias >= 0 && e.dias <= 10)
                     .sort((a, b) => a.dias - b.dias);
             }, [registo.artigo, encomendas]);
+
+            // Lista de encomendas para Transporte (multi-select):
+            // qualquer artigo, subEstado === "solicitada", estado pendente/produzida (ainda
+            // não saiu fisicamente), com entrega prevista para hoje OU já no passado.
+            // Critério alinhado com "Entregas Pendentes" da app de encomendas.
+            const encomendasParaTransporte = useMemo(() => {
+                if (!ehMultiNumSerie(registo.tipo)) return [];
+                return encomendas
+                    .filter(e => e.subEstado === 'solicitada')
+                    .filter(aindaNaoEntregue)
+                    .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                    .filter(e => e.dias !== null && e.dias <= 0)
+                    .sort((a, b) => a.dias - b.dias); // mais atrasadas primeiro
+            }, [registo.tipo, encomendas]);
 
             const regsDia = useMemo(() => 
                 registos.filter(r => r.data === dataAtual && r.colaborador === operador)
@@ -910,7 +947,11 @@
                 }
 
                 if (numSerieEhObrigatorio(registo.tipo) && !registo.numSerie) {
-                    alert('Tens de selecionar o Nº Série da encomenda. Se não houver nenhum disponível para este artigo nos próximos 10 dias, confirma com o supervisor se escolheste o artigo certo.');
+                    if (ehMultiNumSerie(registo.tipo)) {
+                        alert('Tens de selecionar pelo menos uma caixa para transportar. Só aparecem caixas com estado "solicitada" para entrega hoje.');
+                    } else {
+                        alert('Tens de selecionar o Nº Série da encomenda. Se não houver nenhum disponível para este artigo nos próximos 10 dias, confirma com o supervisor se escolheste o artigo certo.');
+                    }
                     return;
                 }
 
@@ -1228,7 +1269,79 @@
                                     </select>
                                 </div>
 
-                                {registo.artigo && numSerieEhObrigatorio(registo.tipo) && (
+                                {registo.artigo && ehMultiNumSerie(registo.tipo) && (() => {
+                                    const selecionadas = nsArray(registo.numSerie);
+                                    const lista = encomendasParaTransporte;
+                                    const toggle = (ns) => {
+                                        const novo = selecionadas.includes(ns)
+                                            ? selecionadas.filter(x => x !== ns)
+                                            : [...selecionadas, ns];
+                                        setRegisto({ ...registo, numSerie: nsStr(novo) });
+                                    };
+                                    return (
+                                        <div className="mb-3">
+                                            <label className="label">🏷️ Caixas a transportar (seleciona todas)</label>
+                                            {lista.length === 0 ? (
+                                                <div style={{ padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                                    ⚠️ Não há encomendas solicitadas pendentes (para hoje ou atrasadas). Confirma com o supervisor.
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '320px', overflowY: 'auto', padding: '4px' }}>
+                                                        {lista.map((e, i) => {
+                                                            const sel = selecionadas.includes(e.numSerie);
+                                                            const atrasada = e.dias < 0;
+                                                            return (
+                                                                <div
+                                                                    key={i}
+                                                                    onClick={() => toggle(e.numSerie)}
+                                                                    style={{
+                                                                        padding: '12px 14px',
+                                                                        border: '2px solid ' + (sel ? '#1e40af' : (atrasada ? '#fca5a5' : '#e2e8f0')),
+                                                                        borderRadius: '10px',
+                                                                        background: sel ? '#eff6ff' : (atrasada ? '#fef2f2' : '#f8fafc'),
+                                                                        cursor: 'pointer',
+                                                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                                                        fontSize: '14px'
+                                                                    }}
+                                                                >
+                                                                    <div style={{ flex: 1 }}>
+                                                                        <div style={{ fontWeight: sel ? 600 : 400 }}>{sel ? '☑' : '☐'} {e.numSerie}</div>
+                                                                        <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                                                            {e.caixa}
+                                                                            {atrasada && (
+                                                                                <span style={{ color: '#b91c1c', marginLeft: '6px', fontWeight: 600 }}>
+                                                                                    ⚠️ atrasada {Math.abs(e.dias)} {Math.abs(e.dias) === 1 ? 'dia' : 'dias'}
+                                                                                </span>
+                                                                            )}
+                                                                            {!atrasada && e.dias === 0 && (
+                                                                                <span style={{ color: '#059669', marginLeft: '6px', fontWeight: 600 }}>
+                                                                                    para hoje
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    {sel && <span style={{ color: '#1e40af', fontSize: '18px' }}>✓</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b', textAlign: 'right' }}>
+                                                        {selecionadas.length} de {lista.length} selecionada(s)
+                                                    </div>
+                                                </>
+                                            )}
+                                            {carregandoEnc && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#64748b' }}>A carregar encomendas...</div>
+                                            )}
+                                            {encError && (
+                                                <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309' }}>{encError}</div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+
+                                {registo.artigo && numSerieEhObrigatorio(registo.tipo) && !ehMultiNumSerie(registo.tipo) && (
                                     <div className="mb-3">
                                         <label className="label">🏷️ Nº Série da Encomenda</label>
                                         <select
@@ -1319,7 +1432,9 @@
                                         >
                                             {loading
                                                 ? '⏳ A guardar...'
-                                                : (faltaNumSerie ? '🔒 Selecione um Nº Série' : '✓ Registar Operação')}
+                                                : (faltaNumSerie
+                                                    ? (ehMultiNumSerie(registo.tipo) ? '🔒 Seleciona as caixas' : '🔒 Seleciona um Nº Série')
+                                                    : '✓ Registar Operação')}
                                         </button>
                                     );
                                 })()}

@@ -98,7 +98,9 @@
             URL_PRODUCAO: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/8c8cb9f38df4489eaa2ebd6afcdab255/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jMin9p5_ZxITDMuRcm2PeH8LlrC6SxeM_hNTLRfn-CI',
             URL_PERTURBACOES: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/971c47b2c0f34fcb87a4d2915ec0b866/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=jenqnDFyXmVuQjtfGbm6PF-gNDUoF-KTu-RJoAX25k4',
             URL_CONFIG: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/464482ea19714e50b858771991c0539d/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=H29XBCpPy1dyMk7Gyj6LAWy8RKI8Q4mpUFdI5qanNKU',
-            URL_ENCOMENDAS: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c77f5fdeb5704193aa1180062b45aad9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2Eub1i-QYw4yW0Jfyp4gvTxgChXKapj9JIyzNeiIUe8'
+            URL_ENCOMENDAS: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/c77f5fdeb5704193aa1180062b45aad9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=2Eub1i-QYw4yW0Jfyp4gvTxgChXKapj9JIyzNeiIUe8',
+            URL_ENCOMENDAS_TERMINADAS: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/42efb5db25d64c65a609d7c1e9640000/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=eTIEcPyCSQdnarEuPjqaBQ4gWyt8tWkAkzki1BSNffc',
+            URL_LER_REGISTOS: 'https://defaultcade90c14fe343a3860494c20418f8.fb.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/630775c56a8e4ea18c0c55e5ee199828/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=nsXoJ_bRoYq09UVkNESpbL8arpQGFCWHFPnFGzpF6Go'
         };
 
         // ============================================================
@@ -226,6 +228,98 @@
             const unidade = (op.unidade || '').toLowerCase();
             const nome = (op.op || op.operacao || '').toLowerCase();
             return unidade.includes('embalamento') || nome.includes('embalamento');
+        }
+
+        // ============================================================
+        // SESSÃO COM EXPIRAÇÃO (dispositivos partilhados)
+        // ============================================================
+        // Sessão expira ao mudar de dia OU após N minutos sem atividade OU
+        // se a janela perdeu o foco por mais de M minutos (operador foi-se embora).
+        const SESSAO_TIMEOUT_MIN = 30;
+        const SESSAO_BLUR_MIN = 5;
+        // Após gravar um registo, a sessão fica aberta apenas por este nº de minutos
+        // para permitir gravar registos seguidos sem fricção.
+        const SESSAO_CURTA_MINUTOS = 3;
+
+        function getSessaoOperador() {
+            const op = localStorage.getItem('operadorProd');
+            if (!op) return null;
+            const ts = parseInt(localStorage.getItem('operadorProdTimestamp') || '0');
+            if (!ts) return null;
+
+            // Verificação 1: mudou de dia? (manhã seguinte = sempre novo PIN)
+            const dataLogin = new Date(ts).toISOString().split('T')[0];
+            const hoje = new Date().toISOString().split('T')[0];
+            if (dataLogin !== hoje) return null;
+
+            // Verificação 2: timeout normal de inatividade.
+            // Se há sessão curta ativa (modo "pós-registo"), usa o limite curto.
+            const expiraCurta = parseInt(localStorage.getItem('sessaoCurtaExpira') || '0');
+            const limiteMs = expiraCurta > 0
+                ? expiraCurta - Date.now()
+                : (SESSAO_TIMEOUT_MIN * 60 * 1000) - (Date.now() - ts);
+            if (limiteMs <= 0) return null;
+
+            // Verificação 3: janela perdeu foco há mais de M minutos?
+            // Se sim, presume que outro operador pode estar a apanhar a app.
+            const blurTs = parseInt(localStorage.getItem('sessaoBlurTimestamp') || '0');
+            if (blurTs > 0) {
+                const blurMs = Date.now() - blurTs;
+                if (blurMs > SESSAO_BLUR_MIN * 60 * 1000) return null;
+            }
+
+            return op;
+        }
+
+        function guardarSessao(nome) {
+            localStorage.setItem('operadorProd', nome);
+            localStorage.setItem('operadorProdTimestamp', Date.now().toString());
+            localStorage.removeItem('sessaoCurtaExpira');
+            localStorage.removeItem('sessaoBlurTimestamp');
+        }
+
+        // Renova sessão para "modo curto" (3 min) — usado depois de gravar registo
+        // ou quando o operador escolhe "registar mais um".
+        function renovarSessaoCurta() {
+            if (localStorage.getItem('operadorProd')) {
+                const expira = Date.now() + SESSAO_CURTA_MINUTOS * 60 * 1000;
+                localStorage.setItem('sessaoCurtaExpira', expira.toString());
+            }
+        }
+
+        // Sai do modo curto para normal (quando operador volta a interagir, e.g. abre formulário)
+        function renovarSessaoNormal() {
+            if (localStorage.getItem('operadorProd')) {
+                localStorage.setItem('operadorProdTimestamp', Date.now().toString());
+                localStorage.removeItem('sessaoCurtaExpira');
+                localStorage.removeItem('sessaoBlurTimestamp');
+            }
+        }
+
+        function limparSessao() {
+            localStorage.removeItem('operadorProd');
+            localStorage.removeItem('operadorProdTimestamp');
+            localStorage.removeItem('sessaoCurtaExpira');
+            localStorage.removeItem('sessaoBlurTimestamp');
+        }
+
+        // ============================================================
+        // REGISTO RETROATIVO
+        // ============================================================
+        // Limite máximo de dias para registo retroativo. Acima disso, bloqueia.
+        const DIAS_MAX_RETROATIVO = 5;
+
+        // Devolve modo do registo:
+        //   'hoje'      — registo.data === hoje (filtro normal)
+        //   'retroativo' — entre 1 e 7 dias atrás (mostra todas as caixas do artigo)
+        //   'bloqueado' — mais de 7 dias atrás OU no futuro
+        function modoRegisto(dataRegisto) {
+            const dias = diasAte(dataRegisto);
+            if (dias === null) return 'hoje';
+            if (dias === 0) return 'hoje';
+            if (dias > 0) return 'bloqueado'; // futuro
+            if (dias >= -DIAS_MAX_RETROATIVO) return 'retroativo';
+            return 'bloqueado';
         }
 
         // ============================================================
@@ -429,7 +523,17 @@
 
         const formatData = d => d ? d.split('-').reverse().join('/') : '';
         const eFeriado = d => FERIADOS.includes(d.slice(5));
-        const eFimDeSemana = d => { const dia = new Date(d + 'T12:00:00').getDay(); return dia === 0 || dia === 6; };
+
+        // Devolve nome do dia da semana se a data for sábado ou domingo, senão null.
+        // Usa hora local para evitar bug de fuso horário.
+        const eFimDeSemana = d => {
+            if (!d) return null;
+            const dt = new Date(d + 'T00:00:00');
+            const dow = dt.getDay();
+            if (dow === 0) return 'domingo';
+            if (dow === 6) return 'sábado';
+            return null;
+        };
 
         const enviarPowerAutomate = async (url, dados) => {
             if (!url || url.includes('xxx')) {
@@ -455,8 +559,8 @@
         const App = () => {
             // Estados
             const [view, setView] = useState('menu');
-            const [operador, setOperador] = useState(localStorage.getItem('operadorProd') || '');
-            const [loggedIn, setLoggedIn] = useState(!!localStorage.getItem('operadorProd'));
+            const [operador, setOperador] = useState(() => getSessaoOperador() || '');
+            const [loggedIn, setLoggedIn] = useState(() => !!getSessaoOperador());
             const [loading, setLoading] = useState(false);
             const [dataAtual, setDataAtual] = useState(new Date().toISOString().split('T')[0]);
 
@@ -498,6 +602,12 @@
             // Lista de colaboradores ATIVOS com estrutura completa { id, nm, sh } para o PIN screen.
             // Inicializa com a lista hardcoded como fallback.
             const [colabsAtivos, setColabsAtivos] = useState(COLABORADORES_LISTA);
+            // Para verificação de dias de registo em falta
+            const [feriadosCfg, setFeriadosCfg] = useState([]);   // ['YYYY-MM-DD', ...]
+            const [ausenciasCfg, setAusenciasCfg] = useState([]); // [{ nome, dataInicio, dataFim }, ...]
+            const [registosHistoricos, setRegistosHistoricos] = useState([]); // todos os registos do operador no mês
+            const [diasFalta, setDiasFalta] = useState([]); // [{ data, diaSemana }]
+            const [showAvisoDias, setShowAvisoDias] = useState(false);
             const [configLoaded, setConfigLoaded] = useState(false);
             const [configError, setConfigError] = useState('');
 
@@ -609,6 +719,24 @@
                         if (perts.length > 0) setPerturbsLista(perts);
                     }
 
+                    // ConfigFeriados
+                    if (dados.feriados && Array.isArray(dados.feriados)) {
+                        const fers = dados.feriados
+                            .map(f => parseDataConfig(f.Data || f.data || f))
+                            .filter(Boolean);
+                        setFeriadosCfg(fers);
+                    }
+
+                    // ConfigAusencias
+                    if (dados.ausencias && Array.isArray(dados.ausencias)) {
+                        const aus = dados.ausencias.map(a => ({
+                            nome: (a.Nome || a.nome || '').toString().trim(),
+                            dataInicio: parseDataConfig(a.DataInicio || a.dataInicio) || '',
+                            dataFim: parseDataConfig(a.DataFim || a.dataFim) || ''
+                        })).filter(a => a.nome && a.dataInicio);
+                        setAusenciasCfg(aus);
+                    }
+
                     // ConfigColaboradores — exclui inativos cuja data de saída já chegou
                     if (dados.colaboradores && Array.isArray(dados.colaboradores) && dados.colaboradores.length > 0) {
                         const hoje = new Date(); hoje.setHours(0,0,0,0);
@@ -699,6 +827,214 @@
                 const t = parseInt(localStorage.getItem('encomendasCacheTime') || '0');
                 if (Date.now() - t > 5 * 60 * 1000) carregarEncomendas();
             }, [loggedIn]);
+
+            // ============================================================
+            // VERIFICAÇÃO DE DIAS DE REGISTO EM FALTA (ao login)
+            // ============================================================
+            // Carrega registos do mês corrente do Excel via Power Automate, calcula
+            // dias úteis sem registo (excluindo feriados e ausências do colaborador)
+            // e mostra modal com a lista para o operador completar.
+            // Helper: converte Date local para 'YYYY-MM-DD' SEM passar por UTC
+            // (evita bug de fuso horário em datas com hora 00:00).
+            const toLocalISO = (d) => {
+                return d.getFullYear() + '-' +
+                       String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                       String(d.getDate()).padStart(2, '0');
+            };
+
+            // Carrega registos do mês corrente do operador, com cache de 1h.
+            const carregarRegistosOperador = async (nomeOperador) => {
+                // Verifica cache (válida por 1h e só do operador atual)
+                const cacheKey = 'registosOpCache_' + nomeOperador;
+                const cacheTimeKey = 'registosOpCacheTime_' + nomeOperador;
+                const cacheTime = parseInt(localStorage.getItem(cacheTimeKey) || '0');
+                const cache = localStorage.getItem(cacheKey);
+                if (cache && (Date.now() - cacheTime < 60 * 60 * 1000)) {
+                    try {
+                        const regs = JSON.parse(cache);
+                        setRegistosHistoricos(regs);
+                        return regs;
+                    } catch (e) { /* cache corrompido, ignora */ }
+                }
+
+                try {
+                    const resp = await fetch(CONFIG.URL_LER_REGISTOS, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    if (!resp.ok) throw new Error('Status ' + resp.status);
+                    const dados = await resp.json();
+                    const arr = Array.isArray(dados) ? dados : (dados.value || []);
+                    const regs = arr
+                        .map(r => ({
+                            data: parseDataConfig(r.Data || r.data) || '',
+                            colaborador: (r.Colaborador || r.colaborador || '').toString().trim()
+                        }))
+                        .filter(r => r.data && r.colaborador === nomeOperador);
+                    setRegistosHistoricos(regs);
+                    localStorage.setItem(cacheKey, JSON.stringify(regs));
+                    localStorage.setItem(cacheTimeKey, Date.now().toString());
+                    return regs;
+                } catch (e) {
+                    console.log('Erro a carregar registos históricos:', e.message);
+                    return [];
+                }
+            };
+
+            // Calcula dias com 0 registos (úteis, não feriados, não ausências) desde
+            // o início do mês corrente até ontem (não inclui hoje).
+            const calcularDiasFalta = (nomeOperador, regs, feriados, ausencias) => {
+                const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+                const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+                const datasComRegisto = new Set(regs.map(r => r.data));
+
+                // Conjunto de datas em que o operador esteve ausente (intervalo expandido)
+                const datasAusente = new Set();
+                ausencias
+                    .filter(a => a.nome === nomeOperador)
+                    .forEach(a => {
+                        // Construir Date em hora local (sem 'T' para evitar parse UTC)
+                        const ini = new Date(a.dataInicio + 'T00:00:00');
+                        const fim = a.dataFim ? new Date(a.dataFim + 'T00:00:00') : new Date(a.dataInicio + 'T00:00:00');
+                        for (let d = new Date(ini); d <= fim; d.setDate(d.getDate() + 1)) {
+                            datasAusente.add(toLocalISO(d));
+                        }
+                    });
+
+                const setFeriados = new Set(feriados);
+                // Adiciona também os feriados nacionais hardcoded (caso falhem no Excel).
+                // FERIADOS está em 'MM-DD' (sem ano), e o ano é sempre o atual.
+                const anoAtual = hoje.getFullYear();
+                FERIADOS.forEach(md => setFeriados.add(anoAtual + '-' + md));
+                const falta = [];
+                for (let d = new Date(inicioMes); d < hoje; d.setDate(d.getDate() + 1)) {
+                    const ds = toLocalISO(d);
+                    const dow = d.getDay(); // 0=domingo, 6=sábado
+                    if (dow === 0 || dow === 6) continue;
+                    if (setFeriados.has(ds)) continue;
+                    if (datasAusente.has(ds)) continue;
+                    if (datasComRegisto.has(ds)) continue;
+                    falta.push({ data: ds, diaSemana: ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dow] });
+                }
+                return falta;
+            };
+
+            // Ao login, carrega registos do operador e calcula dias em falta
+            useEffect(() => {
+                if (!loggedIn || !operador) return;
+                // Só verifica uma vez por sessão (não a cada render)
+                const ultimaVerif = sessionStorage.getItem('ultimaVerifFalta_' + operador);
+                if (ultimaVerif) return;
+                sessionStorage.setItem('ultimaVerifFalta_' + operador, '1');
+
+                (async () => {
+                    const regs = await carregarRegistosOperador(operador);
+                    const falta = calcularDiasFalta(operador, regs, feriadosCfg, ausenciasCfg);
+                    if (falta.length > 0) {
+                        setDiasFalta(falta);
+                        setShowAvisoDias(true);
+                    }
+                })();
+            }, [loggedIn, operador, feriadosCfg, ausenciasCfg]);
+
+            // Verificação periódica: logout automático quando a sessão expira (30min, mudou dia,
+            // ou perdeu foco há mais de SESSAO_BLUR_MIN minutos).
+            // Evita que outro colaborador encontre o tablet com a sessão de outro ainda ativa.
+            useEffect(() => {
+                if (!loggedIn) return;
+                const checkSessao = () => {
+                    if (!getSessaoOperador()) {
+                        // Sessão expirou - força logout
+                        setOperador('');
+                        setLoggedIn(false);
+                        setSelEmp(null);
+                        setPinDigits(['', '', '', '']);
+                    }
+                };
+                // Quando o utilizador perde o foco da janela, regista o timestamp.
+                // Quando volta a ter foco, getSessaoOperador() vai validar se passou tempo demais.
+                const onBlur = () => {
+                    if (localStorage.getItem('operadorProd')) {
+                        localStorage.setItem('sessaoBlurTimestamp', Date.now().toString());
+                    }
+                };
+                const onFocus = () => {
+                    checkSessao();
+                    // Se ainda tem sessão válida ao voltar, limpa o blur timestamp
+                    if (getSessaoOperador()) {
+                        localStorage.removeItem('sessaoBlurTimestamp');
+                    }
+                };
+                const id = setInterval(checkSessao, 60 * 1000); // verifica de minuto a minuto
+                window.addEventListener('blur', onBlur);
+                window.addEventListener('focus', onFocus);
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) onBlur(); else onFocus();
+                });
+                return () => {
+                    clearInterval(id);
+                    window.removeEventListener('blur', onBlur);
+                    window.removeEventListener('focus', onFocus);
+                };
+            }, [loggedIn]);
+
+            // Modo do registo (hoje / retroativo / bloqueado) — usado pelos filtros
+            // de encomenda e pelo carregamento lazy de terminadas.
+            const modoReg = useMemo(() => modoRegisto(registo.data), [registo.data]);
+
+            // ============================================================
+            // TERMINADAS (carregadas só quando o operador faz registo retroativo,
+            // porque uma caixa terminada hoje pode ter sido produzida ontem)
+            // ============================================================
+            const [encomendasTerminadas, setEncomendasTerminadas] = useState(() => {
+                try {
+                    const c = localStorage.getItem('encomendasTerminadasCache');
+                    return c ? JSON.parse(c) : [];
+                } catch (e) { return []; }
+            });
+            const [carregandoTerm, setCarregandoTerm] = useState(false);
+
+            const carregarTerminadas = async () => {
+                setCarregandoTerm(true);
+                try {
+                    const resp = await fetch(CONFIG.URL_ENCOMENDAS_TERMINADAS, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    if (!resp.ok) throw new Error('Status ' + resp.status);
+                    const dados = await resp.json();
+                    const arr = Array.isArray(dados) ? dados : (dados.value || []);
+                    const encs = arr.map(row => ({
+                        caixa: (row.Caixa || row.caixa || '').toString().trim(),
+                        tipologia: (row.Tipologia || row.tipologia || '').toString().trim(),
+                        numSerie: (row['Nº série'] || row.NumSerie || row['Nº serie'] || row['NumSérie'] || '').toString().trim(),
+                        estado: (row.Estado || row.estado || '').toString().trim().toLowerCase(),
+                        subEstado: (row.SubEstado || row.subEstado || '').toString().trim().toLowerCase(),
+                        estadoFinal: (row['Estado Final'] || row.EstadoFinal || '').toString().trim(),
+                        dataEntregaPrevista: parseDataConfig(row['Data Entrega Prevista'] || row.DataEntregaPrevista) || '',
+                        dataEntregaReal: parseDataConfig(row['Data Entrega Real'] || row.DataEntregaReal) || '',
+                        dataEmbalamento: parseDataConfig(row['Data Embalamento'] || row.DataEmbalamento) || '',
+                        terminada: true
+                    })).filter(e => e.caixa && e.numSerie);
+                    setEncomendasTerminadas(encs);
+                    localStorage.setItem('encomendasTerminadasCache', JSON.stringify(encs));
+                    localStorage.setItem('encomendasTerminadasCacheTime', Date.now().toString());
+                    console.log('Terminadas carregadas:', encs.length);
+                } catch (e) {
+                    console.log('Erro a carregar terminadas:', e.message);
+                }
+                setCarregandoTerm(false);
+            };
+
+            // Quando entra em modo retroativo, garantir que terminadas estão carregadas (cache 30min).
+            useEffect(() => {
+                if (!loggedIn) return;
+                if (modoReg !== 'retroativo') return;
+                const t = parseInt(localStorage.getItem('encomendasTerminadasCacheTime') || '0');
+                if (Date.now() - t > 30 * 60 * 1000) carregarTerminadas();
+            }, [loggedIn, modoReg]);
 
             // Forçar recarga das configs
             const recarregarConfigs = () => {
@@ -801,14 +1137,60 @@
             const aindaNaoEntregue = (e) => e.estado === 'pendente' || e.estado === 'produzida';
 
             // Nºs de série de encomendas para o artigo+operação selecionados.
-            // - Para EMBALAMENTO: estado === 'entregue' (já chegaram à secção de embalamento).
-            //   Sem janela de tempo (todas as que estão na secção devem ser embaladas).
-            // - Para outras operações: estado === 'pendente' ou 'produzida', janela 10 dias.
+            // - Modo HOJE + EMBALAMENTO: estado === 'entregue' (já chegaram à secção).
+            // - Modo HOJE + outras operações: estado === 'pendente' ou 'produzida', janela 10 dias.
+            // - Modo RETROATIVO: todas as caixas do artigo (operador escolhe sob sua responsabilidade).
+            // - Modo BLOQUEADO: lista vazia.
             const numerosSerieDisponiveis = useMemo(() => {
                 if (!registo.artigo) return [];
+                if (modoReg === 'bloqueado') return [];
+
                 const opSel = operacoesLista.find(o => o.op === registo.operacao);
                 const ehEmb = ehOperacaoEmbalamento(opSel);
                 const artNorm = normalizaArtigo(registo.artigo);
+
+                if (modoReg === 'retroativo') {
+                    // Modo retroativo: caixas que já tinham trabalho em curso ou concluído.
+                    // - As ativas (pendente/produzida/entregue/embalada) com subEstado solicitada
+                    //   ou estado avançado podem aparecer.
+                    // - As terminadas só aparecem se foram terminadas/embaladas/entregues
+                    //   nos últimos N dias (caso contrário, a lista enche-se de histórico antigo).
+                    const DIAS_TERMINADAS_RECENTES = 5;
+                    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+                    const limite = new Date(hoje); limite.setDate(limite.getDate() - DIAS_TERMINADAS_RECENTES);
+
+                    const dataMaisRecente = (e) => {
+                        const candidatas = [e.dataEmbalamento, e.dataEntregaReal]
+                            .filter(Boolean)
+                            .map(d => new Date(d))
+                            .filter(d => !isNaN(d.getTime()));
+                        if (candidatas.length === 0) return null;
+                        return new Date(Math.max(...candidatas.map(d => d.getTime())));
+                    };
+
+                    const todas = [...encomendas, ...encomendasTerminadas];
+                    const vistas = new Set();
+                    return todas
+                        .filter(e => {
+                            if (vistas.has(e.numSerie)) return false;
+                            vistas.add(e.numSerie);
+                            if (normalizaArtigo(e.caixa) !== artNorm) return false;
+
+                            const jaSolicitada = e.subEstado === 'solicitada';
+                            const jaAvancada = ['entregue', 'embalada', 'terminada'].includes(e.estado);
+                            if (!jaSolicitada && !jaAvancada) return false;
+
+                            // Se está terminada, só mostrar se foi nos últimos 5 dias
+                            if (e.estado === 'terminada' || e.terminada) {
+                                const ref = dataMaisRecente(e);
+                                if (!ref) return false; // sem data = não conseguimos saber, excluir
+                                return ref >= limite;
+                            }
+                            return true;
+                        })
+                        .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                        .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
+                }
 
                 const baseFiltrada = encomendas
                     .filter(e => normalizaArtigo(e.caixa) === artNorm);
@@ -820,27 +1202,43 @@
                         .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
                         .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
                 }
-                // Produção (soldadura, montagem, etc.): pendente/produzida + janela 10 dias
+                // Produção (soldadura, montagem, etc.): pendente/produzida com entrega
+                // até 10 dias no futuro OU atrasadas (caixas com entrega no passado que
+                // ainda não foram produzidas/entregues continuam a precisar de trabalho).
                 return baseFiltrada
                     .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
-                    .filter(e => e.dias !== null && e.dias >= 0 && e.dias <= 10)
+                    .filter(e => e.dias !== null && e.dias <= 10)
                     .sort((a, b) => a.dias - b.dias);
-            }, [registo.artigo, registo.operacao, encomendas, operacoesLista]);
+            }, [registo.artigo, registo.operacao, encomendas, encomendasTerminadas, operacoesLista, modoReg]);
 
             // Lista de encomendas para Transporte (multi-select):
-            // qualquer artigo, subEstado === "solicitada", estado pendente/produzida (ainda
-            // não saiu fisicamente), com entrega prevista para hoje OU já no passado.
-            // Critério alinhado com "Entregas Pendentes" da app de encomendas.
+            // - Modo HOJE: subEstado='solicitada' + estado pendente/produzida + atrasadas/hoje.
+            // - Modo RETROATIVO: todas as encomendas com subEstado='solicitada' (ativas + terminadas).
+            // - Modo BLOQUEADO: vazio.
             const encomendasParaTransporte = useMemo(() => {
                 if (!ehMultiNumSerie(registo.tipo)) return [];
+                if (modoReg === 'bloqueado') return [];
+
+                if (modoReg === 'retroativo') {
+                    const todas = [...encomendas, ...encomendasTerminadas];
+                    const vistas = new Set();
+                    return todas
+                        .filter(e => {
+                            if (vistas.has(e.numSerie)) return false;
+                            vistas.add(e.numSerie);
+                            return e.subEstado === 'solicitada';
+                        })
+                        .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                        .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
+                }
                 return encomendas
                     .filter(e => e.subEstado === 'solicitada')
                     .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
                     .filter(e => e.dias !== null && e.dias <= 0)
-                    .sort((a, b) => a.dias - b.dias); // mais atrasadas primeiro
-            }, [registo.tipo, encomendas]);
+                    .sort((a, b) => a.dias - b.dias);
+            }, [registo.tipo, encomendas, encomendasTerminadas, modoReg]);
 
             const regsDia = useMemo(() => 
                 registos.filter(r => r.data === dataAtual && r.colaborador === operador)
@@ -938,6 +1336,7 @@
                     .filter(([d, min]) => min < 450 && !eFimDeSemana(d) && localStorage.getItem('diaEncerrado_' + emp.nm + '_' + d) !== '1')
                     .sort((a, b) => b[0].localeCompare(a[0])); // mais recente primeiro
                 localStorage.setItem('operadorProd', emp.nm);
+                localStorage.setItem('operadorProdTimestamp', Date.now().toString());
                 setOperador(emp.nm);
                 setLoggedIn(true);
                 setPinError(false);
@@ -954,6 +1353,7 @@
 
             const logout = () => {
                 localStorage.removeItem('operadorProd');
+                localStorage.removeItem('operadorProdTimestamp');
                 setOperador('');
                 setLoggedIn(false);
                 setSelEmp(null);
@@ -978,8 +1378,43 @@
                     return;
                 }
 
+                // Validação de sobreposição de horários (no mesmo dia para o mesmo operador)
+                const minutos = (h) => { const [hh, mm] = (h || '').split(':').map(Number); return (hh || 0) * 60 + (mm || 0); };
+                const novoIni = minutos(registo.horaInicio);
+                const novoFim = minutos(registo.horaFim);
+                if (novoFim <= novoIni) {
+                    alert('A hora de fim tem de ser depois da hora de início.');
+                    return;
+                }
+                const registosDoDia = registos.filter(r => r.data === registo.data && r.colaborador === operador);
+                const perturbacoesDoDia = perturbacoes.filter(p => p.data === registo.data && p.colaborador === operador);
+                const todosDoDia = [
+                    ...registosDoDia.map(r => ({ ...r, _tipo: 'operação', _label: (r.artigo || '') + ' / ' + (r.operacao || '') })),
+                    ...perturbacoesDoDia.map(p => ({ ...p, _tipo: 'perturbação', _label: (p.tipo || 'perturbação') }))
+                ];
+                const conflito = todosDoDia.find(r => {
+                    const ri = minutos(r.horaInicio);
+                    const rf = minutos(r.horaFim);
+                    return novoIni < rf && ri < novoFim; // sobreposição estrita
+                });
+                if (conflito) {
+                    alert(
+                        '⚠️ Sobreposição de horário!\n\n' +
+                        'Já tens um registo nesta data:\n' +
+                        '• ' + conflito.horaInicio + ' – ' + conflito.horaFim + '  (' + conflito._tipo + ')\n' +
+                        '  ' + conflito._label + '\n\n' +
+                        'O novo registo (' + registo.horaInicio + ' – ' + registo.horaFim + ') sobrepõe-se a esse. ' +
+                        'Ajusta as horas e tenta de novo.'
+                    );
+                    return;
+                }
+
                 if (eFeriado(registo.data) && !confirm(formatData(registo.data) + ' é feriado. Continuar?')) return;
 
+                const fimSem = eFimDeSemana(registo.data);
+                if (fimSem && !confirm(formatData(registo.data) + ' é ' + fimSem + '. Trabalhaste neste dia? Continuar?')) return;
+
+                renovarSessaoNormal(); // operador está ativo - mantem sessão de 4h enquanto preenche
                 setLoading(true);
                 const id = Date.now();
                 const dur = calcDuracao(registo.horaInicio, registo.horaFim);
@@ -1029,6 +1464,7 @@
                 });
 
                 setLoading(false);
+                renovarSessaoCurta(); // após gravar, sessão fica em modo curto (3 min)
                 setShowDiaModal(true);
             };
 
@@ -1036,6 +1472,37 @@
             const addPert = async () => {
                 if (!pert.tipo || !pert.horaInicio || !pert.horaFim) {
                     alert('Preencha todos os campos!');
+                    return;
+                }
+
+                // Validação de sobreposição (mesmo conjunto de regras que para registos)
+                const minutos = (h) => { const [hh, mm] = (h || '').split(':').map(Number); return (hh || 0) * 60 + (mm || 0); };
+                const novoIni = minutos(pert.horaInicio);
+                const novoFim = minutos(pert.horaFim);
+                if (novoFim <= novoIni) {
+                    alert('A hora de fim tem de ser depois da hora de início.');
+                    return;
+                }
+                const registosDoDia = registos.filter(r => r.data === pert.data && r.colaborador === operador);
+                const perturbacoesDoDia = perturbacoes.filter(p => p.data === pert.data && p.colaborador === operador);
+                const todosDoDia = [
+                    ...registosDoDia.map(r => ({ ...r, _tipo: 'operação', _label: (r.artigo || '') + ' / ' + (r.operacao || '') })),
+                    ...perturbacoesDoDia.map(p => ({ ...p, _tipo: 'perturbação', _label: (p.tipo || 'perturbação') }))
+                ];
+                const conflito = todosDoDia.find(r => {
+                    const ri = minutos(r.horaInicio);
+                    const rf = minutos(r.horaFim);
+                    return novoIni < rf && ri < novoFim;
+                });
+                if (conflito) {
+                    alert(
+                        '⚠️ Sobreposição de horário!\n\n' +
+                        'Já tens um registo nesta data:\n' +
+                        '• ' + conflito.horaInicio + ' – ' + conflito.horaFim + '  (' + conflito._tipo + ')\n' +
+                        '  ' + conflito._label + '\n\n' +
+                        'A nova perturbação (' + pert.horaInicio + ' – ' + pert.horaFim + ') sobrepõe-se a esse. ' +
+                        'Ajusta as horas e tenta de novo.'
+                    );
                     return;
                 }
 
@@ -1071,6 +1538,7 @@
 
                 setPert({ ...pert, tipo: '', horaInicio: pert.horaFim, horaFim: '' });
                 setLoading(false);
+                renovarSessaoCurta(); // após gravar, sessão fica em modo curto (3 min)
                 setShowDiaModal(true);
             };
 
@@ -1109,10 +1577,74 @@
             };
 
             // ============================================================
+            // MODAL - DIAS DE REGISTO EM FALTA (mostrado ao login)
+            // ============================================================
+            const ModalAvisoDiasFalta = () => {
+                if (!showAvisoDias || diasFalta.length === 0) return null;
+                const irParaDia = (data) => {
+                    setShowAvisoDias(false);
+                    setRegisto({ ...registo, data, tipo: '', artigo: '', numSerie: '', operacao: '', unidade: '', horaInicio: '', horaFim: '', comentarios: '' });
+                    setView('operacao');
+                };
+                return (
+                    <div className="modal-overlay">
+                        <div className="modal-box" style={{ maxWidth: '460px' }}>
+                            <div style={{ fontSize: '52px', marginBottom: '12px' }}>📅</div>
+                            <h2 style={{ color: '#d97706' }}>
+                                {diasFalta.length === 1 ? 'Dia por registar' : diasFalta.length + ' dias por registar'}
+                            </h2>
+                            <p style={{ marginBottom: '8px' }}>Olá <b>{operador}</b>, este mês há dias úteis sem registos teus:</p>
+                            <div style={{ maxHeight: '240px', overflowY: 'auto', margin: '12px 0', padding: '8px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px' }}>
+                                {diasFalta.map((d, i) => {
+                                    const podeRegistar = diasAte(d.data) >= -DIAS_MAX_RETROATIVO;
+                                    return (
+                                        <div key={i} style={{
+                                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                            padding: '8px 10px', marginBottom: '4px',
+                                            background: 'white', borderRadius: '6px', fontSize: '14px'
+                                        }}>
+                                            <span style={{ fontWeight: 500 }}>
+                                                {d.diaSemana} — {d.data.split('-').reverse().join('/')}
+                                            </span>
+                                            {podeRegistar ? (
+                                                <button onClick={() => irParaDia(d.data)} style={{
+                                                    background: '#1e40af', color: 'white', border: 'none',
+                                                    padding: '6px 12px', borderRadius: '6px', fontSize: '12px',
+                                                    fontWeight: 600, cursor: 'pointer'
+                                                }}>
+                                                    Registar
+                                                </button>
+                                            ) : (
+                                                <span style={{ fontSize: '11px', color: '#991b1b' }}>
+                                                    🔒 Fala c/ supervisor
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>
+                                Os dias além de {DIAS_MAX_RETROATIVO} dias atrás não podem ser registados na app — pede ao supervisor para corrigir no admin.
+                            </p>
+                            <button className="modal-btn modal-btn-no" onClick={() => setShowAvisoDias(false)}>
+                                Mais tarde
+                            </button>
+                        </div>
+                    </div>
+                );
+            };
+
+            // ============================================================
             // MODAL - DIA TERMINADO?
             // ============================================================
             const ModalDia = () => {
                 const [fase, setFase] = useState(1);
+
+                // Horas totais do dia (produção + perturbações registadas)
+                const minutosTotais = totais.total;
+                const horasTotais = minutosTotais / 60;
+                const cumpriu8h = horasTotais >= 8;
+                const txtHoras = Math.floor(minutosTotais / 60) + 'h ' + (minutosTotais % 60) + 'min';
 
                 const encerrarDia = () => {
                     localStorage.setItem('diaEncerrado_' + operador + '_' + dataAtual, '1');
@@ -1127,12 +1659,12 @@
                 };
 
                 const continuarRegisto = () => {
+                    renovarSessaoNormal();
                     setShowDiaModal(false);
                     setView('menu');
                 };
 
                 const terminarMaisTarde = () => {
-                    // Não marca como encerrado — pode ser avisado amanhã
                     setShowDiaModal(false);
                     logout();
                 };
@@ -1141,39 +1673,68 @@
                     <div className="modal-overlay">
                         <div className="modal-box">
                             {fase === 1 ? (
-                                <>
-                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
-                                    <h2>Registo guardado!</h2>
-                                    <p>O dia de trabalho está terminado?</p>
-                                    <button className="modal-btn modal-btn-yes" onClick={() => setFase(2)}>
-                                        ✅ Sim, o dia terminou
-                                    </button>
-                                    <button className="modal-btn modal-btn-no" onClick={() => setFase(3)}>
-                                        ➕ Não, tenho mais para registar
-                                    </button>
-                                </>
-                            ) : fase === 2 ? (
+                                cumpriu8h ? (
+                                    // ────────────────────────────────────────────────
+                                    // CASO A: já cumpriu 8h
+                                    // ────────────────────────────────────────────────
+                                    <>
+                                        <div style={{ fontSize: '52px', marginBottom: '12px' }}>🏁</div>
+                                        <h2>Já cumpriste o dia!</h2>
+                                        <p style={{ marginBottom: '6px' }}>
+                                            Tens <b>{txtHoras}</b> registadas hoje ({totais.ops} operações).
+                                        </p>
+                                        <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                                            Dia terminado, ou ainda vais fazer horas extra?
+                                        </p>
+                                        <button className="modal-btn modal-btn-yes" onClick={encerrarDia}>
+                                            ✅ Dia terminado
+                                        </button>
+                                        <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
+                                            ➕ Vou fazer mais (horas extra)
+                                        </button>
+                                        <button className="modal-btn modal-btn-later" onClick={terminarMaisTarde}>
+                                            🕐 Sair (registo mais depois)
+                                        </button>
+                                    </>
+                                ) : (
+                                    // ────────────────────────────────────────────────
+                                    // CASO B: ainda não cumpriu 8h
+                                    // ────────────────────────────────────────────────
+                                    <>
+                                        <div style={{ fontSize: '52px', marginBottom: '12px' }}>✅</div>
+                                        <h2>Registo guardado!</h2>
+                                        <p style={{ marginBottom: '6px' }}>
+                                            Tens <b>{txtHoras}</b> registadas hoje ({totais.ops} operações).
+                                        </p>
+                                        <p style={{ fontSize: '13px', color: '#92400e', background: '#fef3c7', padding: '8px 12px', borderRadius: '8px', marginBottom: '16px' }}>
+                                            ⏳ Faltam <b>{(8 - horasTotais).toFixed(1).replace('.', ',')}h</b> para completar o dia. Queres registar mais agora?
+                                        </p>
+                                        <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
+                                            ➕ Sim, registar mais um
+                                        </button>
+                                        <button className="modal-btn modal-btn-later" onClick={terminarMaisTarde}>
+                                            🕐 Não, registo mais tarde
+                                        </button>
+                                        <button className="modal-btn modal-btn-yes" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }} onClick={() => setFase(2)}>
+                                            ⚠️ Saí mais cedo (terminar dia)
+                                        </button>
+                                    </>
+                                )
+                            ) : (
+                                // ────────────────────────────────────────────────
+                                // FASE 2: confirmação de "saiu mais cedo" (com < 8h)
+                                // ────────────────────────────────────────────────
                                 <>
                                     <div style={{ fontSize: '52px', marginBottom: '12px' }}>🤔</div>
-                                    <h2>Como foi o dia?</h2>
-                                    <p>Cumpriu o horário completo ou saiu mais cedo?</p>
-                                    <button className="modal-btn modal-btn-yes" onClick={encerrarDia}>
-                                        ✅ Dia completo
-                                    </button>
+                                    <h2>Confirmar saída antecipada</h2>
+                                    <p>
+                                        Só tens <b>{txtHoras}</b> registadas. Confirmas que saíste mais cedo e queres terminar o dia?
+                                    </p>
                                     <button className="modal-btn" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', marginBottom: '10px' }} onClick={saiMaisCedo}>
-                                        🕐 Saí mais cedo
+                                        ✅ Sim, saí mais cedo
                                     </button>
-                                </>
-                            ) : (
-                                <>
-                                    <div style={{ fontSize: '52px', marginBottom: '12px' }}>📋</div>
-                                    <h2>O que pretendes fazer?</h2>
-                                    <p>Continua a registar ou deixa para mais tarde.</p>
-                                    <button className="modal-btn modal-btn-no" onClick={continuarRegisto}>
-                                        📦 Continuar a registar
-                                    </button>
-                                    <button className="modal-btn modal-btn-later" onClick={terminarMaisTarde}>
-                                        🕐 Terminar mais tarde
+                                    <button className="modal-btn modal-btn-no" onClick={() => setFase(1)}>
+                                        ← Voltar atrás
                                     </button>
                                 </>
                             )}
@@ -1264,16 +1825,41 @@
                     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
                         {avisoRegistosAbertos && <ModalAvisoAberto />}
                         {showDiaModal && <ModalDia />}
+                    {showAvisoDias && <ModalAvisoDiasFalta />}
                         <div style={{ background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                             <button className="btn btn-secondary" style={{ marginBottom: '15px' }} onClick={() => setView('menu')}>← Voltar</button>
                             <h1 style={{ margin: 0, fontSize: '22px' }}>📦 Registar Operação</h1>
-                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operador}</p>
+                            <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '2px' }}>👤 SESSÃO ATIVA</div>
+                                    <div style={{ fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{operador}</div>
+                                </div>
+                                <button onClick={logout} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                                    🚪 Não sou eu
+                                </button>
+                            </div>
                         </div>
                         <div style={{ padding: '20px' }}>
                             <div className="card">
                                 <div className="mb-3">
                                     <label className="label">📅 Data</label>
-                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value })} />
+                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value, numSerie: '' })} />
+                                    {modoReg === 'retroativo' && (() => {
+                                        const diasAtras = Math.abs(diasAte(registo.data));
+                                        return (
+                                            <div style={{ marginTop: '8px', padding: '10px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '8px', fontSize: '13px', color: '#92400e' }}>
+                                                ⏪ <b>Registo retroativo</b> — {diasAtras} {diasAtras === 1 ? 'dia' : 'dias'} atrás. Vais ver caixas solicitadas ou já avançadas (incluindo terminadas). Confirma bem o Nº Série antes de gravar.
+                                                {carregandoTerm && (
+                                                    <div style={{ marginTop: '4px', fontSize: '11px' }}>⌛ A carregar caixas terminadas...</div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                    {modoReg === 'bloqueado' && (
+                                        <div style={{ marginTop: '8px', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                            🔒 <b>Data não permitida</b> — só podes registar até {DIAS_MAX_RETROATIVO} dias atrás. Para registos mais antigos, fala com o supervisor.
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="mb-3">
@@ -1290,6 +1876,11 @@
                                         <option value="">{registo.tipo ? 'Selecionar...' : 'Selecione programa primeiro'}</option>
                                         {artigosFilt.map((a, i) => <option key={i} value={a.artigo}>{a.artigo}</option>)}
                                     </select>
+                                    {registo.tipo && artigosFilt.length === 0 && (
+                                        <div style={{ marginTop: '8px', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                            ⚠️ Não há artigos configurados para o programa <b>{registo.tipo}</b>. Pede ao administrador para adicionar no Excel ConfigArtigos.
+                                        </div>
+                                    )}
                                 </div>
 
                                 {registo.artigo && ehMultiNumSerie(registo.tipo) && (() => {
@@ -1374,6 +1965,11 @@
                                         <option value="">{registo.artigo ? 'Selecionar...' : 'Selecione artigo primeiro'}</option>
                                         {opsFilt.map((o, i) => <option key={i} value={o.op}>{o.op}</option>)}
                                     </select>
+                                    {registo.artigo && opsFilt.length === 0 && (
+                                        <div style={{ marginTop: '8px', padding: '10px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                            ⚠️ Não há operações configuradas para o artigo <b>{registo.artigo}</b>. Pede ao administrador para adicionar no Excel ConfigOperacoes.
+                                        </div>
+                                    )}
                                     {registo.unidade && (
                                         <div style={{ marginTop: '8px', padding: '8px 12px', background: '#eff6ff', borderRadius: '8px', fontSize: '13px', color: '#1e40af' }}>
                                             📍 {registo.unidade}
@@ -1403,7 +1999,9 @@
                                                         {e.numSerie}
                                                         {ehEmb
                                                             ? (e.dataEntregaPrevista ? ' — entrega ' + e.dataEntregaPrevista.split('-').reverse().join('/') : '')
-                                                            : (e.dias === 0 ? ' — entrega hoje' : (e.dias === 1 ? ' — entrega amanhã' : ' — entrega em ' + e.dias + ' dias'))
+                                                            : (e.dias < 0
+                                                                ? ' — ⚠️ atrasada ' + Math.abs(e.dias) + (Math.abs(e.dias) === 1 ? ' dia' : ' dias')
+                                                                : (e.dias === 0 ? ' — entrega hoje' : (e.dias === 1 ? ' — entrega amanhã' : ' — entrega em ' + e.dias + ' dias')))
                                                         }
                                                     </option>
                                                 ))}
@@ -1450,8 +2048,9 @@
                                 </div>
 
                                 {(() => {
-                                    const faltaNumSerie = numSerieEhObrigatorio(registo.tipo) && registo.artigo && (ehMultiNumSerie(registo.tipo) || registo.operacao) && !registo.numSerie;
-                                    const submitBloqueado = loading || faltaNumSerie;
+                                    const dataBloqueada = modoReg === 'bloqueado';
+                                    const faltaNumSerie = !dataBloqueada && numSerieEhObrigatorio(registo.tipo) && registo.artigo && (ehMultiNumSerie(registo.tipo) || registo.operacao) && !registo.numSerie;
+                                    const submitBloqueado = loading || dataBloqueada || faltaNumSerie;
                                     return (
                                         <button
                                             className="btn btn-success"
@@ -1465,9 +2064,11 @@
                                         >
                                             {loading
                                                 ? '⏳ A guardar...'
-                                                : (faltaNumSerie
-                                                    ? (ehMultiNumSerie(registo.tipo) ? '🔒 Seleciona as caixas' : '🔒 Seleciona um Nº Série')
-                                                    : '✓ Registar Operação')}
+                                                : dataBloqueada
+                                                    ? '🔒 Data não permitida'
+                                                    : (faltaNumSerie
+                                                        ? (ehMultiNumSerie(registo.tipo) ? '🔒 Seleciona as caixas' : '🔒 Seleciona um Nº Série')
+                                                        : '✓ Registar Operação')}
                                         </button>
                                     );
                                 })()}
@@ -1504,10 +2105,19 @@
                 return (
                     <div style={{ minHeight: '100vh', background: '#fef2f2' }}>
                         {showDiaModal && <ModalDia />}
+                    {showAvisoDias && <ModalAvisoDiasFalta />}
                         <div style={{ background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.2)', marginBottom: '15px' }} onClick={() => setView('menu')}>← Voltar</button>
                             <h1 style={{ margin: 0, fontSize: '22px' }}>⚠️ Registar Perturbação</h1>
-                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operador}</p>
+                            <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '2px' }}>👤 SESSÃO ATIVA</div>
+                                    <div style={{ fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{operador}</div>
+                                </div>
+                                <button onClick={logout} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                                    🚪 Não sou eu
+                                </button>
+                            </div>
                         </div>
                         <div style={{ padding: '20px' }}>
                             <div className="card">
@@ -1580,7 +2190,15 @@
                         <div style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.2)', marginBottom: '15px' }} onClick={() => setView('menu')}>← Voltar</button>
                             <h1 style={{ margin: 0, fontSize: '22px' }}>📊 Resumo do Dia</h1>
-                            <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{formatData(dataAtual)} - {operador}</p>
+                                                        <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '2px' }}>👤 {formatData(dataAtual)}</div>
+                                    <div style={{ fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{operador}</div>
+                                </div>
+                                <button onClick={logout} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                                    🚪 Não sou eu
+                                </button>
+                            </div>
                         </div>
                         <div style={{ padding: '20px' }}>
                             {/* Totais */}
@@ -1679,12 +2297,21 @@
                     {avisoRegistosAbertos && <ModalAvisoAberto />}
                     {/* Modal dia terminado */}
                     {showDiaModal && <ModalDia />}
+                    {showAvisoDias && <ModalAvisoDiasFalta />}
                     {/* Header */}
                     <div style={{ background: 'linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%)', color: 'white', padding: '20px', paddingTop: '40px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div>
                                 <h1 style={{ margin: 0, fontSize: '22px' }}>🏭 Registo Produção</h1>
-                                <p style={{ margin: '5px 0 0 0', opacity: 0.9, fontSize: '14px' }}>{operador}</p>
+                                <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(255,255,255,0.18)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                    <div style={{ fontSize: '11px', opacity: 0.85, marginBottom: '2px' }}>👤 SESSÃO ATIVA</div>
+                                    <div style={{ fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{operador}</div>
+                                </div>
+                                <button onClick={logout} style={{ background: '#dc2626', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+                                    🚪 Não sou eu
+                                </button>
+                            </div>
                             </div>
                             <button className="btn" style={{ background: 'rgba(255,255,255,0.2)' }} onClick={() => setView('resumo')}>📊</button>
                         </div>

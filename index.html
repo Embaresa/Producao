@@ -176,7 +176,7 @@
         // ============================================================
         // Tipos cuja seleção de Nº Série é OPCIONAL (não associados a encomendas).
         // Tipos cuja seleção de Nº Série é OPCIONAL (não associados a encomendas).
-        const TIPOS_SEM_ENCOMENDA_OBRIG = ['Logistica', 'E1-Frac', 'Maquinacao'];
+        const TIPOS_SEM_ENCOMENDA_OBRIG = ['Logistica', 'Maquinacao'];
 
         // Tipos com seleção MÚLTIPLA de Nº Série (transporte de várias caixas em simultâneo).
         const TIPOS_MULTI_NS = ['Transporte'];
@@ -585,7 +585,7 @@
             });
 
             const [registo, setRegisto] = useState({
-                data: dataAtual, tipo: '', artigo: '', numSerie: '', operacao: '', unidade: '',
+                data: dataAtual, tipo: '', artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '',
                 horaInicio: '', horaFim: '', comentarios: ''
             });
 
@@ -1203,14 +1203,43 @@
                         .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
                 }
                 // Produção (soldadura, montagem, etc.): pendente/produzida com entrega
-                // até 10 dias no futuro OU atrasadas (caixas com entrega no passado que
-                // ainda não foram produzidas/entregues continuam a precisar de trabalho).
+                // até 10 dias no futuro OU atrasadas até 5 dias (caixas com entrega no
+                // passado que ainda não foram produzidas/entregues continuam a precisar
+                // de trabalho, mas só dentro de uma janela razoável).
                 return baseFiltrada
                     .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
-                    .filter(e => e.dias !== null && e.dias <= 10)
+                    .filter(e => e.dias !== null && e.dias <= 10 && e.dias >= -5)
                     .sort((a, b) => a.dias - b.dias);
             }, [registo.artigo, registo.operacao, encomendas, encomendasTerminadas, operacoesLista, modoReg]);
+
+            // PENDENTES PARA STOCK: 3 encomendas pendentes seguintes do artigo,
+            // mostradas num 2º dropdown quando o colaborador escolhe "STOCK" — para
+            // ele indicar a qual encomenda futura corresponde a produção antecipada.
+            const pendentesParaStock = useMemo(() => {
+                if (!registo.artigo) return [];
+                if (modoReg !== 'hoje') return [];
+
+                const artNorm = normalizaArtigo(registo.artigo);
+                // Encomendas pendentes do artigo que ainda NÃO estão "solicitadas"
+                // (sem caixa específica em curso) — candidatas a receber a produção
+                // antecipada para stock. Inclui as sem data de entrega prevista
+                // (que são tipicamente as pendentes "puras" sem agendamento ainda).
+                // Ordenação: com data ascendente primeiro, depois as sem data.
+                return encomendas
+                    .filter(e => normalizaArtigo(e.caixa) === artNorm)
+                    .filter(aindaNaoEntregue)
+                    .filter(e => e.subEstado !== 'solicitada')
+                    .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                    .filter(e => e.dias === null || e.dias >= -5)
+                    .sort((a, b) => {
+                        if (a.dias === null && b.dias === null) return 0;
+                        if (a.dias === null) return 1;  // sem data vai para o fim
+                        if (b.dias === null) return -1;
+                        return a.dias - b.dias;
+                    })
+                    .slice(0, 3);
+            }, [registo.artigo, encomendas, modoReg]);
 
             // Lista de encomendas para Transporte (multi-select):
             // - Modo HOJE: subEstado='solicitada' + estado pendente/produzida + atrasadas/hoje.
@@ -1230,13 +1259,14 @@
                             return e.subEstado === 'solicitada';
                         })
                         .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
+                        .filter(e => e.dias !== null && e.dias >= -5)
                         .sort((a, b) => (a.dias ?? 999) - (b.dias ?? 999));
                 }
                 return encomendas
                     .filter(e => e.subEstado === 'solicitada')
                     .filter(aindaNaoEntregue)
                     .map(e => ({ ...e, dias: diasAte(e.dataEntregaPrevista) }))
-                    .filter(e => e.dias !== null && e.dias <= 0)
+                    .filter(e => e.dias !== null && e.dias <= 0 && e.dias >= -5)
                     .sort((a, b) => a.dias - b.dias);
             }, [registo.tipo, encomendas, encomendasTerminadas, modoReg]);
 
@@ -1372,8 +1402,10 @@
                 if (numSerieEhObrigatorio(registo.tipo) && !registo.numSerie) {
                     if (ehMultiNumSerie(registo.tipo)) {
                         alert('Tens de selecionar pelo menos uma caixa para transportar. Só aparecem caixas com estado "solicitada" para entrega hoje.');
+                    } else if (registo.modoStock) {
+                        alert('Escolheste STOCK mas ainda não atribuíste a uma encomenda pendente. Seleciona uma das encomendas pendentes para gravar.');
                     } else {
-                        alert('Tens de selecionar o Nº Série da encomenda. Se não houver nenhum disponível para este artigo nos próximos 10 dias, confirma com o supervisor se escolheste o artigo certo.');
+                        alert('Tens de selecionar o Nº Série da encomenda. Se não houver nenhum disponível para este artigo, confirma com o supervisor se escolheste o artigo certo.');
                     }
                     return;
                 }
@@ -1459,7 +1491,7 @@
 
                 setRegisto({
                     ...registo,
-                    artigo: '', numSerie: '', operacao: '', unidade: '',
+                    artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '',
                     horaInicio: registo.horaFim, horaFim: '', comentarios: ''
                 });
 
@@ -1583,7 +1615,7 @@
                 if (!showAvisoDias || diasFalta.length === 0) return null;
                 const irParaDia = (data) => {
                     setShowAvisoDias(false);
-                    setRegisto({ ...registo, data, tipo: '', artigo: '', numSerie: '', operacao: '', unidade: '', horaInicio: '', horaFim: '', comentarios: '' });
+                    setRegisto({ ...registo, data, tipo: '', artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '', horaInicio: '', horaFim: '', comentarios: '' });
                     setView('operacao');
                 };
                 return (
@@ -1843,7 +1875,7 @@
                             <div className="card">
                                 <div className="mb-3">
                                     <label className="label">📅 Data</label>
-                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value, numSerie: '' })} />
+                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value, numSerie: '', modoStock: false })} />
                                     {modoReg === 'retroativo' && (() => {
                                         const diasAtras = Math.abs(diasAte(registo.data));
                                         return (
@@ -1872,7 +1904,7 @@
 
                                 <div className="mb-3">
                                     <label className="label">📦 Artigo</label>
-                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, numSerie: '', operacao: '', unidade: '' })} disabled={!registo.tipo}>
+                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, numSerie: '', modoStock: false, operacao: '', unidade: '' })} disabled={!registo.tipo}>
                                         <option value="">{registo.tipo ? 'Selecionar...' : 'Selecione programa primeiro'}</option>
                                         {artigosFilt.map((a, i) => <option key={i} value={a.artigo}>{a.artigo}</option>)}
                                     </select>
@@ -1960,7 +1992,7 @@
                                     <select className="input" value={registo.operacao} onChange={e => {
                                         const o = operacoesLista.find(x => x.op === e.target.value);
                                         // Reset numSerie quando muda operação (o filtro de NS depende da operação)
-                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '', numSerie: '' });
+                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '', numSerie: '', modoStock: false });
                                     }} disabled={!registo.artigo}>
                                         <option value="">{registo.artigo ? 'Selecionar...' : 'Selecione artigo primeiro'}</option>
                                         {opsFilt.map((o, i) => <option key={i} value={o.op}>{o.op}</option>)}
@@ -1980,20 +2012,27 @@
                                 {registo.artigo && registo.operacao && numSerieEhObrigatorio(registo.tipo) && !ehMultiNumSerie(registo.tipo) && (() => {
                                     const opSel = operacoesLista.find(o => o.op === registo.operacao);
                                     const ehEmb = ehOperacaoEmbalamento(opSel);
+                                    const semEncomendas10d = numerosSerieDisponiveis.length === 0;
+                                    const escolheuStock = !!registo.modoStock;
+                                    const semPendentesParaStock = pendentesParaStock.length === 0;
+                                    // Valor a mostrar no select principal: '__STOCK__' se está em modo stock
+                                    const valorSelectPrincipal = escolheuStock ? '__STOCK__' : registo.numSerie;
                                     return (
                                         <div className="mb-3">
                                             <label className="label">🏷️ Nº Série da Encomenda</label>
                                             <select
                                                 className="input"
-                                                value={registo.numSerie}
-                                                onChange={e => setRegisto({ ...registo, numSerie: e.target.value })}
-                                                disabled={numerosSerieDisponiveis.length === 0}
+                                                value={valorSelectPrincipal}
+                                                onChange={e => {
+                                                    if (e.target.value === '__STOCK__') {
+                                                        // Entra em modo stock — limpa numSerie até user atribuir pendente
+                                                        setRegisto({ ...registo, numSerie: '', modoStock: true });
+                                                    } else {
+                                                        setRegisto({ ...registo, numSerie: e.target.value, modoStock: false });
+                                                    }
+                                                }}
                                             >
-                                                <option value="">
-                                                    {numerosSerieDisponiveis.length === 0
-                                                        ? (ehEmb ? 'Sem caixas entregues à secção de embalamento' : 'Sem encomendas em curso (próximos 10 dias)')
-                                                        : 'Selecionar...'}
-                                                </option>
+                                                <option value="">Selecionar...</option>
                                                 {numerosSerieDisponiveis.map((e, i) => (
                                                     <option key={i} value={e.numSerie}>
                                                         {e.numSerie}
@@ -2005,12 +2044,46 @@
                                                         }
                                                     </option>
                                                 ))}
+                                                <option value="__STOCK__">📦 STOCK — produção antecipada (sem encomenda para sair)</option>
                                             </select>
-                                            {numerosSerieDisponiveis.length === 0 && (
+
+                                            {/* 2º dropdown: aparece sempre que STOCK foi escolhido */}
+                                            {escolheuStock && !semPendentesParaStock && (
+                                                <div style={{ marginTop: '12px' }}>
+                                                    <label className="label">📌 Atribuir a qual encomenda pendente?</label>
+                                                    <select
+                                                        className="input"
+                                                        value={registo.numSerie}
+                                                        onChange={e => setRegisto({ ...registo, numSerie: e.target.value })}
+                                                    >
+                                                        <option value="">Selecionar encomenda...</option>
+                                                        {pendentesParaStock.map((e, i) => (
+                                                            <option key={'p-' + i} value={e.numSerie}>
+                                                                {e.numSerie}
+                                                                {e.dias === null
+                                                                    ? ' — sem data de entrega'
+                                                                    : ' — entrega em ' + e.dias + ' ' + (e.dias === 1 ? 'dia' : 'dias') + (e.dataEntregaPrevista ? ' (' + e.dataEntregaPrevista.split('-').reverse().join('/') + ')' : '')
+                                                                }
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <div style={{ marginTop: '6px', fontSize: '12px', color: '#64748b' }}>
+                                                        A produção fica registada com o Nº Série da encomenda que escolheres.
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {escolheuStock && semPendentesParaStock && (
                                                 <div style={{ marginTop: '8px', padding: '8px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', fontSize: '13px', color: '#991b1b' }}>
+                                                    ⚠️ Não há nenhuma encomenda pendente deste artigo para atribuir o stock. Confirma com o supervisor.
+                                                </div>
+                                            )}
+
+                                            {semEncomendas10d && !escolheuStock && (
+                                                <div style={{ marginTop: '8px', padding: '8px 12px', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: '8px', fontSize: '13px', color: '#1e40af' }}>
                                                     {ehEmb
-                                                        ? '⚠️ Não há caixas deste artigo entregues à secção de embalamento. Confirma com o supervisor.'
-                                                        : '⚠️ Não há encomendas deste artigo para entrega nos próximos 10 dias. Confirma com o supervisor se escolheste o artigo certo.'}
+                                                        ? 'ℹ️ Não há caixas deste artigo entregues à secção de embalamento. Se estás a embalar para stock, seleciona "STOCK".'
+                                                        : 'ℹ️ Não há encomendas deste artigo para sair nos próximos 10 dias. Se estás a produzir para stock, seleciona "STOCK".'}
                                                 </div>
                                             )}
                                             {carregandoEnc && (

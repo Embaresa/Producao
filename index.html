@@ -585,7 +585,7 @@
             });
 
             const [registo, setRegisto] = useState({
-                data: dataAtual, tipo: '', artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '',
+                data: dataAtual, tipo: '', artigo: '', numSerie: '', modoStock: false, caixaConcluida: false, operacao: '', unidade: '',
                 horaInicio: '', horaFim: '', comentarios: ''
             });
 
@@ -1076,6 +1076,7 @@
                         HoraInicio: r.horaInicio, HoraFim: r.horaFim,
                         Duracao: (r.duracao || 0).toString(), Comentarios: r.comentarios || '',
                         NumSerie: r.numSerie || '',
+                        CaixaConcluida: r.caixaConcluida ? 'Sim' : 'Nao',
                         DataHoraRegisto: r.dataHora
                     });
                     const idx = novosRegs.findIndex(x => x.id === r.id);
@@ -1466,6 +1467,7 @@
                     horaFim: registo.horaFim,
                     duracao: dur,
                     comentarios: registo.comentarios,
+                    caixaConcluida: !!registo.caixaConcluida,
                     dataHora: new Date().toLocaleString('pt-PT'),
                     synced: false
                 };
@@ -1484,6 +1486,7 @@
                     Duracao: dur.toString(),
                     Comentarios: registo.comentarios || '',
                     NumSerie: registo.numSerie || '',
+                    CaixaConcluida: registo.caixaConcluida ? 'Sim' : 'Nao',
                     DataHoraRegisto: new Date().toLocaleString('pt-PT')
                 });
 
@@ -1492,7 +1495,7 @@
 
                 setRegisto({
                     ...registo,
-                    artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '',
+                    artigo: '', numSerie: '', modoStock: false, caixaConcluida: false, operacao: '', unidade: '',
                     horaInicio: registo.horaFim, horaFim: '', comentarios: ''
                 });
 
@@ -1616,7 +1619,7 @@
                 if (!showAvisoDias || diasFalta.length === 0) return null;
                 const irParaDia = (data) => {
                     setShowAvisoDias(false);
-                    setRegisto({ ...registo, data, tipo: '', artigo: '', numSerie: '', modoStock: false, operacao: '', unidade: '', horaInicio: '', horaFim: '', comentarios: '' });
+                    setRegisto({ ...registo, data, tipo: '', artigo: '', numSerie: '', modoStock: false, caixaConcluida: false, operacao: '', unidade: '', horaInicio: '', horaFim: '', comentarios: '' });
                     setView('operacao');
                 };
                 return (
@@ -1876,7 +1879,7 @@
                             <div className="card">
                                 <div className="mb-3">
                                     <label className="label">📅 Data</label>
-                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value, numSerie: '', modoStock: false })} />
+                                    <input type="date" className="input" value={registo.data} onChange={e => setRegisto({ ...registo, data: e.target.value, numSerie: '', modoStock: false, caixaConcluida: false })} />
                                     {modoReg === 'retroativo' && (() => {
                                         const diasAtras = Math.abs(diasAte(registo.data));
                                         return (
@@ -1905,7 +1908,7 @@
 
                                 <div className="mb-3">
                                     <label className="label">📦 Artigo</label>
-                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, numSerie: '', modoStock: false, operacao: '', unidade: '' })} disabled={!registo.tipo}>
+                                    <select className="input" value={registo.artigo} onChange={e => setRegisto({ ...registo, artigo: e.target.value, numSerie: '', modoStock: false, caixaConcluida: false, operacao: '', unidade: '' })} disabled={!registo.tipo}>
                                         <option value="">{registo.tipo ? 'Selecionar...' : 'Selecione programa primeiro'}</option>
                                         {artigosFilt.map((a, i) => <option key={i} value={a.artigo}>{a.artigo}</option>)}
                                     </select>
@@ -1993,7 +1996,7 @@
                                     <select className="input" value={registo.operacao} onChange={e => {
                                         const o = operacoesLista.find(x => x.op === e.target.value);
                                         // Reset numSerie quando muda operação (o filtro de NS depende da operação)
-                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '', numSerie: '', modoStock: false });
+                                        setRegisto({ ...registo, operacao: e.target.value, unidade: o?.unidade || '', numSerie: '', modoStock: false, caixaConcluida: false });
                                     }} disabled={!registo.artigo}>
                                         <option value="">{registo.artigo ? 'Selecionar...' : 'Selecione artigo primeiro'}</option>
                                         {opsFilt.map((o, i) => <option key={i} value={o.op}>{o.op}</option>)}
@@ -2027,9 +2030,9 @@
                                                 onChange={e => {
                                                     if (e.target.value === '__STOCK__') {
                                                         // Entra em modo stock — limpa numSerie até user atribuir pendente
-                                                        setRegisto({ ...registo, numSerie: '', modoStock: true });
+                                                        setRegisto({ ...registo, numSerie: '', modoStock: true, caixaConcluida: false });
                                                     } else {
-                                                        setRegisto({ ...registo, numSerie: e.target.value, modoStock: false });
+                                                        setRegisto({ ...registo, numSerie: e.target.value, modoStock: false, caixaConcluida: false });
                                                     }
                                                 }}
                                             >
@@ -2071,6 +2074,26 @@
                                                     <div style={{ marginTop: '6px', fontSize: '12px', color: '#64748b' }}>
                                                         A produção fica registada com o Nº Série da encomenda que escolheres.
                                                     </div>
+
+                                                    {/* Checkbox: caixa concluída — só aparece quando há pendente atribuída */}
+                                                    {registo.numSerie && (
+                                                        <label style={{ marginTop: '12px', display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 12px', background: registo.caixaConcluida ? '#ecfdf5' : '#f8fafc', border: '1px solid ' + (registo.caixaConcluida ? '#86efac' : '#e2e8f0'), borderRadius: '8px', cursor: 'pointer' }}>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={!!registo.caixaConcluida}
+                                                                onChange={e => setRegisto({ ...registo, caixaConcluida: e.target.checked })}
+                                                                style={{ marginTop: '2px', width: '18px', height: '18px', cursor: 'pointer' }}
+                                                            />
+                                                            <div>
+                                                                <div style={{ fontSize: '13px', fontWeight: '600', color: registo.caixaConcluida ? '#15803d' : '#334155' }}>
+                                                                    ✅ Caixa concluída — pronta para stock
+                                                                </div>
+                                                                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                                                    Marca se esta caixa ficou totalmente acabada (todas as operações feitas). Não marques se ainda falta alguma operação.
+                                                                </div>
+                                                            </div>
+                                                        </label>
+                                                    )}
                                                 </div>
                                             )}
 

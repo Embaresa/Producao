@@ -1216,9 +1216,10 @@
             // PENDENTES PARA STOCK: 3 encomendas pendentes seguintes do artigo,
             // mostradas num 2º dropdown quando o colaborador escolhe "STOCK" — para
             // ele indicar a qual encomenda futura corresponde a produção antecipada.
+            // Funciona em modo "hoje" e em modo "retroativo" (registos de dias anteriores).
             const pendentesParaStock = useMemo(() => {
                 if (!registo.artigo) return [];
-                if (modoReg !== 'hoje') return [];
+                if (modoReg === 'bloqueado') return [];
 
                 const artNorm = normalizaArtigo(registo.artigo);
                 // Encomendas pendentes do artigo que ainda NÃO estão "solicitadas"

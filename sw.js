@@ -1,5 +1,5 @@
 // Incrementa esta versão sempre que fizeres upload de ficheiros novos
-const CACHE_VERSION = 'producao-embaresa-v4';
+const CACHE_VERSION = 'producao-embaresa-v5';
 const CACHE_NAME = CACHE_VERSION;
 
 // Instalar — limpar caches antigos e activar imediatamente
